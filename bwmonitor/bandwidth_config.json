@@ -1,0 +1,20 @@
+{
+    "a6:74:6f:0f:8c:ee" : {
+        "last_update_time" : 0,
+        "last_update_interval" : 0,
+        "last_recv_bytes" : 0,
+        "last_send_bytes" : 0,
+        "bandwidth_total" : 0,
+        "bandwidth_used" : 0,
+        "opposite_port_mac" : "e6:6a:8c:66:9f:65"
+    },
+    "e6:6a:8c:66:9f:65" : {
+        "last_update_time" : 0,
+        "last_update_interval" : 0,
+        "last_recv_bytes" : 0,
+        "last_send_bytes" : 0,
+        "bandwidth_total" : 0,
+        "bandwidth_used" : 0,
+        "opposite_port_mac" : "a6:74:6f:0f:8c:ee"
+    }
+}
