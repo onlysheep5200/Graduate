@@ -12,8 +12,7 @@ from linkstat import LinkStats
 
 SAMPLING_INTERVAL = 100 #采样时间
 configFileDir = 'bandwidth_config.json'
-MONITOR_ADDR1 = "tcp:%s:6644"
-MONITOR_ADDR2 = "tcp:%s:6645"
+MONITOR_ADDR = "tcp:%s:6644"
 
 class SimpleMonitor(simple_switch_13.SimpleSwitch13):
 
@@ -26,10 +25,7 @@ class SimpleMonitor(simple_switch_13.SimpleSwitch13):
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures,CONFIG_DISPATCHER)
     def _bridge_info_initializer(self,ev):
         datapath = ev.datapath
-        try:
-            bridge = self.init_bridge_info(datapath,MONITOR_ADDR1)
-        except Exception,e :
-            bridge = self.init_bridge_info(datapath,MONITOR_ADDR2)
+        bridge = self.init_bridge_info(datapath,MONITOR_ADDR)
         ports = bridge.get_vif_port()
         for p in ports :
             print p
