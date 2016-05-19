@@ -24,7 +24,7 @@ class SimpleMonitor(simple_switch_13.SimpleSwitch13):
 
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures,CONFIG_DISPATCHER)
     def _bridge_info_initializer(self,ev):
-        datapath = ev.datapath
+        datapath = ev.msg.datapath
         bridge = self.init_bridge_info(datapath,MONITOR_ADDR)
         ports = bridge.get_vif_port()
         for p in ports :
