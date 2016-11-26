@@ -124,7 +124,7 @@ class NetworkDelayDetector(app_manager.RyuApp):
         self.lldp_delays[src][dst] = lldpdelay
         delay = self.get_delay(src,dst)
         if delay > 0 : 
-            self.link_delays[src][dst] = delay*100
+            self.link_delays[src][dst] = delay*1000
 
 
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
