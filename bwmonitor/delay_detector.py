@@ -41,20 +41,20 @@ class NetworkDelayDetector(app_manager.RyuApp):
         self.lldp_delays = {} # src -> dst -> delay
         self.link_delays = {} # src -> dst -> delay
 
-    # @set_ev_cls(ofp_event.EventOFPStateChange,
-    #             [MAIN_DISPATCHER, DEAD_DISPATCHER])
-    # def _state_change_handler(self, ev):
-    #     datapath = ev.datapath
-    #     if ev.state == MAIN_DISPATCHER:
-    #         if not datapath.id in self.datapaths:
-    #             self.logger.debug('Register datapath: %016x', datapath.id)
-    #             self.datapaths[datapath.id] = datapath
-    #             self.link_delays[datapath.id] = {}
-    #     elif ev.state == DEAD_DISPATCHER:
-    #         if datapath.id in self.datapaths:
-    #             self.logger.debug('Unregister datapath: %016x', datapath.id)
-    #             del self.link_delays[datapath.id]
-    #             del self.datapaths[datapath.id]
+    @set_ev_cls(ofp_event.EventOFPStateChange,
+                [MAIN_DISPATCHER, DEAD_DISPATCHER])
+    def _state_change_handler(self, ev):
+        datapath = ev.datapath
+        if ev.state == MAIN_DISPATCHER:
+            if not datapath.id in self.datapaths:
+                self.logger.debug('Register datapath: %016x', datapath.id)
+                self.datapaths[datapath.id] = datapath
+                self.link_delays[datapath.id] = {}
+        elif ev.state == DEAD_DISPATCHER:
+            if datapath.id in self.datapaths:
+                self.logger.debug('Unregister datapath: %016x', datapath.id)
+                del self.link_delays[datapath.id]
+                del self.datapaths[datapath.id]
 
     def _detector(self):
         """
@@ -62,7 +62,6 @@ class NetworkDelayDetector(app_manager.RyuApp):
             Send echo request and calculate link delay periodically
         """
         while True:
-            print 'sending echo request'
             self._send_echo_request()
             # self.create_link_delay()
             # try:
@@ -86,6 +85,7 @@ class NetworkDelayDetector(app_manager.RyuApp):
     @set_ev_cls(ofp_event.EventOFPEchoReply, MAIN_DISPATCHER)
     def echo_reply_handler(self, ev):
         now_timestamp = time.time()
+        print 'echo reply accept'
         try:
             latency = now_timestamp - eval(ev.msg.data)
             self.echo_latency[ev.msg.datapath.id] = latency
@@ -108,8 +108,8 @@ class NetworkDelayDetector(app_manager.RyuApp):
         try:
             fwd_delay = self.lldp_delays[src][dst]
             re_delay = self.lldp_delays[dst][src]
-            src_latency = self.echo_latency[src]
-            dst_latency = self.echo_latency[dst]
+            src_latency = self.echo_latency[src] if src in self.echo_latency else 0
+            dst_latency = self.echo_latency[dst] if dst in self.echo_latency else 0
             
             delay = (fwd_delay + re_delay - src_latency - dst_latency)/2
             return max(delay, 0)
@@ -124,7 +124,7 @@ class NetworkDelayDetector(app_manager.RyuApp):
         self.lldp_delays[src][dst] = lldpdelay
         delay = self.get_delay(src,dst)
         if delay > 0 : 
-            self.link_delays[src][dst] = delay
+            self.link_delays[src][dst] = delay*100
 
 
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
@@ -158,8 +158,9 @@ class NetworkDelayDetector(app_manager.RyuApp):
                 print "    %s : %s"%(dst,self.link_delays[src][dst])
 
     def show_switches_delay(self):
-        if self.sw_module : 
-            for port in self.sw_module.ports.keys() : 
-                print "pid : %s, port : %s, delay : %s"%(str(port.dpid),str(port.port_no),str(self.sw_module.ports[port].delay))
+        pass
+        # if self.sw_module :
+        #     for port in self.sw_module.ports.keys() :
+                #print "pid : %s, port : %s, delay : %s"%(str(port.dpid),str(port.port_no),str(self.sw_module.ports[port].delay))
 
         

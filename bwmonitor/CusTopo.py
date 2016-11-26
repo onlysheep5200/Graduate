@@ -33,7 +33,6 @@ class MyTopo(Topo):
         switches = [self.addHost('s%d'%i) for i in range(1,11)]
         for i in range(10) :
             self.addLink(switches[i],hosts[i])
-        self.addLink(switches[0],)
         for i in range(len(mapping)) :
             peers = mapping[i]
             for p in peers :
