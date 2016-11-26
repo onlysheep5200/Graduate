@@ -12,6 +12,8 @@ from ryu.topology.switches import LLDPPacket
 import networkx as nx
 import time
 import setting
+from ryu.topology import event
+import random
 
 
 CONF = cfg.CONF
@@ -39,20 +41,20 @@ class NetworkDelayDetector(app_manager.RyuApp):
         self.lldp_delays = {} # src -> dst -> delay
         self.link_delays = {} # src -> dst -> delay
 
-    @set_ev_cls(ofp_event.EventOFPStateChange,
-                [MAIN_DISPATCHER, DEAD_DISPATCHER])
-    def _state_change_handler(self, ev):
-        datapath = ev.datapath
-        if ev.state == MAIN_DISPATCHER:
-            if not datapath.id in self.datapaths:
-                self.logger.debug('Register datapath: %016x', datapath.id)
-                self.datapaths[datapath.id] = datapath
-                self.link_delays[datapath.id] = {}
-        elif ev.state == DEAD_DISPATCHER:
-            if datapath.id in self.datapaths:
-                self.logger.debug('Unregister datapath: %016x', datapath.id)
-                del self.link_delays[datapath.id]
-                del self.datapaths[datapath.id]
+    # @set_ev_cls(ofp_event.EventOFPStateChange,
+    #             [MAIN_DISPATCHER, DEAD_DISPATCHER])
+    # def _state_change_handler(self, ev):
+    #     datapath = ev.datapath
+    #     if ev.state == MAIN_DISPATCHER:
+    #         if not datapath.id in self.datapaths:
+    #             self.logger.debug('Register datapath: %016x', datapath.id)
+    #             self.datapaths[datapath.id] = datapath
+    #             self.link_delays[datapath.id] = {}
+    #     elif ev.state == DEAD_DISPATCHER:
+    #         if datapath.id in self.datapaths:
+    #             self.logger.debug('Unregister datapath: %016x', datapath.id)
+    #             del self.link_delays[datapath.id]
+    #             del self.datapaths[datapath.id]
 
     def _detector(self):
         """
@@ -73,27 +75,16 @@ class NetworkDelayDetector(app_manager.RyuApp):
             hub.sleep(setting.DELAY_DETECTING_PERIOD)
 
     def _send_echo_request(self):
-        """
-            Seng echo request msg to datapath.
-        """
         for datapath in self.datapaths.values():
             print self.sw_module.ports
             parser = datapath.ofproto_parser
             echo_req = parser.OFPEchoRequest(datapath,
                                              data="%.12f" % time.time())
             datapath.send_msg(echo_req)
-            # Important! Don't send echo request together, Because it will
-            # generate a lot of echo reply almost in the same time.
-            # which will generate a lot of delay of waiting in queue
-            # when processing echo reply in echo_reply_handler.
-
-            hub.sleep(self.sending_echo_request_interval)
+            hub.sleep(random.randint(0,10))
 
     @set_ev_cls(ofp_event.EventOFPEchoReply, MAIN_DISPATCHER)
     def echo_reply_handler(self, ev):
-        """
-            Handle the echo reply msg, and get the latency of link.
-        """
         now_timestamp = time.time()
         try:
             latency = now_timestamp - eval(ev.msg.data)

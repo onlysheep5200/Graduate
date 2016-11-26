@@ -1,0 +1,1 @@
+﻿ sudo mn --mac --custom CusTopo.py --topo mytopo --controller remote,ip=10.210.48.231,port=6633 --link=tc
