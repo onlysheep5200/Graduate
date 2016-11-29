@@ -30,6 +30,37 @@ nodemap = {}
 
 redis_client = redis.StrictRedis(host='127.0.0.1', port=6379, db=0)
 
+bandwidth_mapping = {
+    0 : {
+        9 : 14,
+        5 : 10,
+        3 : 32,
+        7 : 12
+    },
+    1 : {
+        9 : 23,
+        5 : 47,
+        4 : 16,
+        8 : 78,
+    },
+    2 : {
+        7 : 55,
+        6 : 71,
+        10 : 9
+    },
+    3 : {
+        8 : 11,
+        6 : 32,
+        10 : 88
+    },
+    4 : {
+        6 : 34
+    },
+    6 : {
+        8 : 66
+    }
+}
+
 def get_link_node(dpid):
     if dpid in nodemap :
         return nodemap[dpid]
@@ -140,8 +171,10 @@ class TopoDetector(app_manager.RyuApp):
 
 
 
-
     def _get_bandwidth(self,src_dp,dst_dp):
-        return 10.0
+        if src_dp-1 in bandwidth_mapping and dst_dp in bandwidth_mapping[src_dp-1] :
+            return bandwidth_mapping[src_dp][dst_dp]
+        else :
+            return bandwidth_mapping[dst_dp-1][src_dp]
 #
 
