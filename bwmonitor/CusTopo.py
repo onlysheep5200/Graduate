@@ -38,7 +38,8 @@ class MyTopo(Topo):
         for i in range(len(mapping)) :
             peers = mapping[i]
             for p in peers :
-                self.addLink(switches[i],switches[p-1],bw=bandwidths[i][p-1],delay='%dms'%delays[i][p-1])
+                #self.addLink(switches[i],switches[p-1],bw=bandwidths[i][p-1],delay='%dms'%delays[i][p-1])
+                self.addLink(switches[i],switches[p-1],bw=10,delay='%dms'%10)
 
 
 
