@@ -75,7 +75,6 @@ class NetworkDelayDetector(app_manager.RyuApp):
 
     def _send_echo_request(self):
         for datapath in self.datapaths.values():
-            print self.sw_module.ports
             parser = datapath.ofproto_parser
             echo_req = parser.OFPEchoRequest(datapath,
                                              data="%.12f" % time.time())
@@ -85,7 +84,6 @@ class NetworkDelayDetector(app_manager.RyuApp):
     @set_ev_cls(ofp_event.EventOFPEchoReply, MAIN_DISPATCHER)
     def echo_reply_handler(self, ev):
         now_timestamp = time.time()
-        print 'echo reply accept'
         try:
             latency = now_timestamp - eval(ev.msg.data)
             self.echo_latency[ev.msg.datapath.id] = latency
@@ -134,7 +132,6 @@ class NetworkDelayDetector(app_manager.RyuApp):
         """
         msg = ev.msg
         try:
-            print 'lldp packet in '
             src_dpid, src_port_no = LLDPPacket.lldp_parse(msg.data)
             dpid = msg.datapath.id
             if self.sw_module is None:

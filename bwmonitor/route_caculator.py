@@ -40,6 +40,9 @@ PROTOCOL_UDP = 2
 FLOW_STATE_ACTIVE = 1
 FLOW_STATE_REMOVED = 2
 
+RECACULATE_FOR_RESOURCE_ADD = 1
+RECACULATE_FOR_RESOURCE_DECREASE = 2
+
 
 
 
@@ -68,34 +71,98 @@ class Flow(object) :
         self.application_type = transport_protocol
         self.priority = FLOW_PRIORITY_NORMAL
         self.qos = qos
-        self.qos_has_changed = False
+        self.degree_time = 0
         self.current_priority = 1
         self.state = FLOW_STATE_ACTIVE
         Flow.id_gen_lock.acquire()
         self.group_id = Flow.current_group_id
         Flow.current_group_id += 1
         Flow.id_gen_lock.release()
+        self.queue_id = 0
+        self.degree_lock = Lock()
+
+    @property
+    def is_degrade(self):
+        return self.degree_time < 0
 
     def set_path(self,path):
         if path :
             self.path = path
             self.path.install(self)
+    #TODO:concurrent
+    def degrade(self):
+        self.degree_lock.acquire()
+        self.priority -= 1
+        self.degree_time += 1
+        self.degree_lock.release()
+    #TODO:concurrent
+    def upgrade(self):
+        self.degree_lock.acquire()
+        if self.degree_time <0:
+            self.priority += 1
+            self.degree_time -=1
+        self.degree_lock.release()
+
+
 
 
 class Path(object) :
     def __init__(self,graph,nodes):
         self.graph = graph
-        self.edges = []
         self.nodes = nodes
         self.source = nodes[0]
         self.target = nodes[-1]
-        for i in xrange(0,len(nodes)-1) :
-            self.edges.append(graph[nodes[i]][nodes[i+1]])
-        if self.edges :
-            self.bandwidth = sorted(self.edges,lambda x,y : cmp(y['bandwidth'],x['bandwidth']))[0]['bandwidth']
-            self.free_bandwidth = sorted(self.edges,lambda x,y : cmp(x['free'],y['free']))
+        self.latency = 0
+        self.bandwidth = 0
+        self.free_bandwidth = 0
+        self.loss = 0
+        self.inf = 0
+        # for i in xrange(0,len(nodes)-1) :
+        #     self.edges.append(graph[nodes[i]][nodes[i+1]])
+        # if self.edges :
+        #     self.bandwidth = sorted(self.edges,lambda x,y : cmp(y['bandwidth'],x['bandwidth']))[0]['bandwidth']
+        #     self.free_bandwidth = sorted(self.edges,lambda x,y : cmp(x['free'],y['free']))
         self.flows = {}
         self.flow_entries = {} # dpid -> [flow table entries]
+        self.qos_flow_exists = False
+        self.update_attrs()
+
+    def update_attrs(self):
+        edges = self._get_edges()
+        if edges :
+            self.bandwidth = sorted(edges,lambda x,y : cmp(y['bandwidth'],x['bandwidth']))[0]['bandwidth']
+            self.free_bandwidth = sorted(edges,lambda x,y : cmp(x['free'],y['free']))
+            self.latency = sum([l['latency'] for l in edges])
+            self.loss = reduce(lambda x,y : (1-x)*(1-y),[l['loss'] for l in edges],1)
+            self.qos_flow_exists = len(filter(lambda x : x.priority > FLOW_PRIORITY_NORMAL,self.flows))>0
+            self.edges = edges
+
+
+    def meet_qos_for_flow(self,flow):
+        if not flow.qos :
+            return True
+        qos = flow.qos
+        if self.free_bandwidth >= qos.bandwidth and self.latency <= qos.latency :
+            return True
+        return False
+
+    def meet_qos_for_exists_flows(self):
+        qos_flows = [f for f in self.flows if not f.is_degrade]
+        if qos_flows :
+            free_now = self.free_bandwidth
+            bandwidth_meet = reduce(lambda x,y : x-y,map(lambda f : f.qos.bandwidth,free_now),self.free_bandwidth) >= 0
+            latency_meet = reduce(lambda x,y : x and y,[f.qos.latency >= self.latency for f in qos_flows])
+            return bandwidth_meet and latency_meet
+        return True
+
+    def meet_qos_for_exists_flow(self,flow):
+        if flow.priority <= FLOW_PRIORITY_NORMAL :
+            return True
+        if self.latency <= flow.qos.latency and self.free_bandwidth+flow.speed > flow.qos.bandwidth:
+            return True
+        return False
+
+
 
     #TODO:path with single node should be handle
     def install(self,flow):
@@ -116,6 +183,14 @@ class Path(object) :
                     extrasActions = []
                 self._install_flow_entry(flow,preNode,node,nextNode,extra_actions=extrasActions)
             self.flows[match] = flow
+
+    def flow_remove(self,flow):
+        if flow.match in self.flows and flow.path == self :
+            match = flow.match
+            edges = self._get_edges()
+            for e in edges :
+                e['flows'].remove(match)
+            del self.flows[match]
 
 
     def _install_flow_entry(self,flow,preNode,node,nextNode,extra_actions = None):
@@ -153,6 +228,7 @@ class Path(object) :
                 actions = [parser.OFPActionOutput(target_host_port,
                                       ofproto.OFPCML_NO_BUFFER)]
                 app.add_flow(nextDp,flow.current_priority,match,actions)
+        curEdge['flows'].append(match)
 
     def _get_report_controller_action(self,app,node):
         datapaths = self._get_datapaths(app)
@@ -171,8 +247,18 @@ class Path(object) :
             datapaths = app.datapaths
         return datapaths
 
+    def _get_edges(self):
+        edges = []
+        if self.graph :
+            for i in xrange(0,len(self.nodes)-1) :
+                edges.append(self.graph[self.nodes[i]][self.nodes[i+1]])
+        return edges
+
     def __str__(self):
         return self.nodes.__str__()
+
+    def __eq__(self, other):
+        return self.nodes.__eq__(other.nodes)
 
 
 class RouterCaculator(app_manager.RyuApp):
@@ -188,7 +274,9 @@ class RouterCaculator(app_manager.RyuApp):
         if self.topo_module :
             self.datapaths = self.topo_module.datapaths
         self.flows = {}
+        self.paths = set()
         self._host_module = None
+        self.name = "route_caculator"
 
     @property
     def topo_module(self):
@@ -239,11 +327,11 @@ class RouterCaculator(app_manager.RyuApp):
         if eth.ethertype == ether_types.ETH_TYPE_LLDP:
             # ignore lldp packet
             return
-        print eth.ethertype
         arp_pkt = get_protocol(pkt,arp.arp)
         if arp_pkt :
             #ignore arp packet
             return
+        print 'packet from datapath:%s port_no:%s'%(datapath.id,match['in_port'])
         match = self.get_match(pkt,match,parser,ofproto)
         if not match :
             return
@@ -261,11 +349,11 @@ class RouterCaculator(app_manager.RyuApp):
                 flow.qos = qos
                 path = self.get_init_path_for_flow(flow)
             flow.set_path(path)
+            self.paths.add(path)
 
         elif datapath.id == self.flows[match].source_dp_id :
             self.send_to_application_recog(msg)
 
-        print match in self.flows
 
     @set_ev_cls(ofp_event.EventOFPFlowRemoved, MAIN_DISPATCHER)
     def flow_removed_handler(self,ev):
@@ -392,7 +480,122 @@ class RouterCaculator(app_manager.RyuApp):
         pass
 
     def get_init_path_for_flow(self, flow):
+        path = self._get_best_route_for_flow(flow)
+        if path :
+            return path
+        else :
+            pass
+
+    '''
+        callback :
+            def callback(rs_type,p,recaculate_status = True,bandwidth_left = 0,changed_normal_flows=None,changed_qos_flows=None,degrade_flows=None,*args,**kwargs)
+                .....
+                return True or False
+    '''
+    def route_reschedule(self,path,trigger=RECACULATE_FOR_RESOURCE_DECREASE,callback = None):
+        if trigger == RECACULATE_FOR_RESOURCE_ADD :
+            pass
+        else :
+            qos_flows = [f for f in path.flows if f.priority == FLOW_PRIORITY_PROTECT]
+            normal_flows = [f for f in path.flows if f.priority == FLOW_PRIORITY_NORMAL]
+            bandwidth_need = reduce(lambda x,y : x.qos.bandwidth + y.qos.bandwidth,qos_flows)
+            left = bandwidth_need - path.free_bandwidth
+            bandwidth_for_normal = reduce(lambda x,y : x.speed + y.speed,normal_flows)
+            if bandwidth_for_normal > left :
+                return callback(recaculate_status = True,limit = left,changed_normal_flows=normal_flows)
+            else :
+                changed_qos_flows = []
+                unchanged_qos_flows = []
+                reduced_bandwidth = 0
+                qos_flows = sorted(qos_flows,cmp = lambda x,y : cmp(x.qos.bandwidth,y.qos.bandwidth))
+                for f in qos_flows :
+                    new_path = self._get_best_route_for_flow(f)
+                    if new_path != path :
+                        changed_qos_flows.append(f)
+                        left -= f.qos.bandwidth
+                        if bandwidth_for_normal >= left :
+                            return callback(True,left,normal_flows,changed_qos_flows)
+
+                    else :
+                        unchanged_qos_flows.append(f)
+                flows_for_degrade = []
+                for f in unchanged_qos_flows :
+                    if left > bandwidth_for_normal :
+                        flows_for_degrade.append(f)
+                        left -= f.qos.bandwidth
+                    else :
+                        break
+                return callback(True,left,normal_flows,changed_qos_flows,flows_for_degrade)
+
+    def callback_for_reschedule(self,p,rs_type=RECACULATE_FOR_RESOURCE_DECREASE,recaculate_status = True,limit=0,changed_normal_flows=None,changed_qos_flows=None,degrade_flows=None):
         pass
+
+    def callback_for_virtual_reschedule(self,path,rs_type=RECACULATE_FOR_RESOURCE_DECREASE,recaculate_status = True,bandwdith_left=0,changed_normal_flows=None,changed_qos_flows=None,degrade_flows=None,*args,**kwargs):
+        if 'flow' not in kwargs:
+            return
+        flow = kwargs['flow']
+        if rs_type == RECACULATE_FOR_RESOURCE_DECREASE and recaculate_status :
+            if degrade_flows :
+                return
+            for f in changed_qos_flows :
+                new_path = self._get_best_route_for_flow(flow)
+                path.flow_remove(f)
+                f.set_path(new_path)
+            self.limit_speed_for_flows(changed_normal_flows,path,bandwdith_left)
+            flow.set_path(path)
+            path.update_attrs()
+
+
+
+    def _install_path(self,flow,path=None):
+        if not  path :
+            path = self.get_init_path_for_flow(flow)
+        if path :
+            if flow.path :
+                flow.path.flow_remove(flow)
+            flow.set_path(path)
+        else :
+            #TODO:handle if without path
+            return
+
+
+
+
+
+
+
+
+
+
+
+
+    def limit_speed_for_flows(self,flows,path,speed=0):
+        pass
+
+
+    def _get_flows_meet_bandwidth(self,flows,bandwidth):
+        pass
+
+
+
+
+
+
+
+    def _get_best_route_for_flow(self,flow):
+        graph = self.topo_module
+        src = get_link_node(flow.source_dp_id)
+        dst = get_link_node(flow.target_dp_id)
+        raw_paths = nx.all_simple_paths(graph,src,dst)
+        paths = [Path(graph,rp) for rp in raw_paths]
+        paths = filter(lambda p : p.meet_qos_for_flow(flow),paths)
+        if paths :
+            return sorted(paths,cmp=lambda x,y : cmp(x.inf,y.inf))[0]
+        else :
+            return None
+
+
+
 
 
 

@@ -15,8 +15,9 @@ import setting
 from collections import namedtuple
 import logging
 from ryu.topology.api import get_all_switch
+import json
 
-
+import redis
 CONF = cfg.CONF
 
 LOG = logging.getLogger(__name__)
@@ -25,6 +26,9 @@ LOG = logging.getLogger(__name__)
 LinkNode = namedtuple('LinkNode','dpid')
 
 nodemap = {}
+
+
+redis_client = redis.StrictRedis(host='127.0.0.1', port=6379, db=0)
 
 def get_link_node(dpid):
     if dpid in nodemap :
@@ -51,6 +55,8 @@ class TopoDetector(app_manager.RyuApp):
         self.datapaths = {}
         self.ports_in_dp = {} # dpid -> port_no
         self.refresh_datapath_thread = hub.spawn(self.refresh_datapaths_view)
+        self.dump_topo_thread = hub.spawn(self._dump_topo)
+        self._host_module = None
 
 
     @set_ev_cls(event.EventLinkAdd)
@@ -79,7 +85,8 @@ class TopoDetector(app_manager.RyuApp):
         original_bandwidth = self._get_bandwidth(src.dpid,dst.dpid)
 
         self.graph.add_edge(src,dst,{'influence' : 0.0,'latency' : 0,'bandwidth' : original_bandwidth,'bandwidth_used' : 0,
-                                     'loss' : 0, 'free': original_bandwidth,'src_port' : src_port,'dst_port' : dst_port})
+                                     'loss' : 0, 'free': original_bandwidth,'src_port' : src_port,'dst_port' : dst_port,
+                                     'flows' : [],'reserve':0})
 
         LOG.info("new link add : %s.%s -> %s.%s"%(src.dpid,src_port,dst.dpid,dst_port))
 
@@ -102,13 +109,34 @@ class TopoDetector(app_manager.RyuApp):
         while True :
             hub.sleep(setting.DATAPATH_REFRESH_PERIOD)
             switches = get_all_switch(self)
-            LOG.info('switch num is %d'%len(switches))
+            #LOG.info('switch num is %d'%len(switches))
             for sw in switches :
                 dp = sw.dp
                 if dp.id not in self.datapaths :
                     self.datapaths[dp.id] = dp
                 ports = [p.port_no for p in sw.ports]
                 self.ports_in_dp[dp.id] = set(ports)
+
+    def get_edges(self,nodes):
+        edges = []
+        if self.graph :
+            for i in xrange(0,len(nodes)-1) :
+                edges.append(self.graph[nodes[i]][nodes[i+1]])
+        return edges
+
+    def _dump_topo(self):
+        while True :
+            result = {}
+            if self.graph :
+                for n1 in self.graph :
+                    result.setdefault(n1.dpid,{})
+                    for n2 in self.graph[n1] :
+                        if n2.dpid in result and n1.dpid in result[n2.dpid] :
+                            continue
+                        result[n1.dpid][n2.dpid] = self.graph[n1][n2]
+                redis_client.set('topo_for_switchs',json.dumps(result))
+            hub.sleep(5)
+
 
 
 

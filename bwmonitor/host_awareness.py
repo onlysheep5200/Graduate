@@ -12,7 +12,9 @@ import time
 import setting
 import logging
 from collections import namedtuple
-
+import redis
+import json
+from ryu.lib import hub
 
 CONF = cfg.CONF
 
@@ -30,7 +32,7 @@ def get_host(dpid,port_no,ip,mac) :
         return Host(ip=ip,mac = mac,dpid = dpid,port_no = port_no)
     return hosts[mac]
 
-
+redis_client = redis.StrictRedis(host='127.0.0.1', port=6379, db=0)
 
 # A pure arp proxy
 class HostAwareness(app_manager.RyuApp):
@@ -47,6 +49,7 @@ class HostAwareness(app_manager.RyuApp):
         self.name = "hostaware"
         self.ip_to_host = {} # ip -> host
         self.mac_to_host = {} # mac -> host
+        self.dum_hosts_thread = hub.spawn(self._dump_hosts)
 
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
     def packet_in_handler(self,ev):
@@ -94,9 +97,10 @@ class HostAwareness(app_manager.RyuApp):
             #flood inner every datapath
             else :
                 datapaths = self.topo_module.datapaths
-                print datapaths
                 for _,dp in datapaths.iteritems() :
-                    outward_ports = self.topo_module.dp_outward_port[dp.id]
+                    outward_ports = self.topo_module.dp_outward_port.get(dp.id)
+                    if not outward_ports :
+                        continue
                     ports = self.topo_module.ports_in_dp[dp.id]
                     ports = [p for p in ports if p not in outward_ports]
                     self.send_output_msg_to_datapath(dp,ports,msg.data)
@@ -113,6 +117,20 @@ class HostAwareness(app_manager.RyuApp):
                                   in_port=ofproto.OFPP_CONTROLLER, actions=actions,
                                   data=data)
         dp.send_msg(out)
+
+    def _dump_hosts(self):
+        while True :
+            result = {}
+            for host in self.ip_to_host.values() :
+                dpid = host.dpid
+                result.setdefault(dpid,[])
+                result[dpid].append({
+                    'ip' : host.ip,
+                    'mac' : host.mac,
+                    'port_no' : host.port_no
+                })
+            redis_client.set('topo_for_hosts',json.dumps(result))
+            hub.sleep(5)
 
 
 
