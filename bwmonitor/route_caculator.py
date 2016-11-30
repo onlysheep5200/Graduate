@@ -400,7 +400,7 @@ class RouterCaculator(app_manager.RyuApp):
             if not path :
                 self.logger.error("no path for current flow from %s to %s"%(match['ipv4_src'],match['ipv4_dst']) )
                 return
-            print 'path for %s to %s is : %s'%(match['ipv4_src'],match['ipv4_dst'],str(path))
+            print 'path for %s to %s is : %s,path inf is %s'%(match['ipv4_src'],match['ipv4_dst'],str(path),str(path.inf))
             flow.set_path(path)
             self.paths.add(path)
             if self.flow_monitor :

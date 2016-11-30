@@ -30,7 +30,7 @@ PortLoss = namedtuple('PortLoss','tx_loss rx_loss version')
 
 
 
-class TopoDetector(app_manager.RyuApp):
+class BandwidthDetector(app_manager.RyuApp):
     """
         NetworkDelayDetector is a Ryu app for collecting link delay.
     """
@@ -39,7 +39,7 @@ class TopoDetector(app_manager.RyuApp):
 
 
     def __init__(self, *args, **kwargs):
-        super(TopoDetector, self).__init__(*args, **kwargs)
+        super(BandwidthDetector, self).__init__(*args, **kwargs)
         self.name = "bandwidthaware"
         self._topo_module = lookup_service_brick("topoaware")
         self.datapaths = {}
@@ -94,6 +94,7 @@ class TopoDetector(app_manager.RyuApp):
             stat.rx_bytes,stat.tx_dropped,stat.rx_dropped
 
             period = self._get_period(stat.duration_sec,stat.duration_nsec,last_rep.duration_sec,last_rep.duration_nsec)
+            #print 'dp : %s,port %s ,now : %s, pre : %s'%(str(dpid),str(port_no),str(tx_bytes),str(last_rx_bytes))
             self.port_speed[(dpid,port_no)] = PortSpeed(tx_speed=self._get_speed(tx_bytes,last_tx_bytes,period),
                                                         rx_speed=self._get_speed(rx_bytes,last_rx_bytes,period),
                                                         version = speed_version+1)
@@ -116,15 +117,28 @@ class TopoDetector(app_manager.RyuApp):
                 dst_key = (dst.dpid,dst_port)
                 dst_speed = self.port_speed.get(dst_key)
                 dst_loss = self.port_loss.get(dst_key)
-                if dst_speed and src_speed.version == dst_speed.version :
-                    used = min(src_speed.tx_speed,dst_speed.rx_speed)
+                if src_speed and dst_speed:
+                    # if src_speed.version == dst_speed.version :
+                    #     used = min(src_speed.tx_speed,dst_speed.rx_speed)
+                    # else :
+                    #     used = src_speed.tx_speed if src_speed.version > dst_speed.version else dst_speed.rx_speed
+                    used = self.get_real_speed(src_speed,dst_speed)
+                    print 'current speed for %s:%s is %s'%(dpid,port_no,used)
                     graph[src][dst]['bandwidth_used'] = used
                     graph[src][dst]['free'] = graph[src][dst]['bandwidth'] - used
-                    used = min(src_speed.rx_speed,dst_speed.tx_speed)
+                    #used = min(src_speed.rx_speed,dst_speed.tx_speed)
+                    used = self.get_real_speed(src_speed,dst_speed)
                     graph[dst][src]['bandwidth_used'] = used
                     graph[dst][src]['free'] = graph[dst][src]['bandwidth'] - used
                     graph[src][dst]['loss'] = self._get_link_loss(src_loss.tx_loss,dst_loss.rx_loss)
                     graph[dst][src]['loss'] = self._get_link_loss(dst_loss.tx_loss,src_loss.rx_loss)
+
+    def get_real_speed(self,src_speed,dst_speed):
+        if src_speed.version == dst_speed.version :
+            used = max(src_speed.tx_speed,dst_speed.rx_speed)
+        else :
+            used = src_speed.tx_speed if src_speed.version > dst_speed.version else dst_speed.rx_speed
+        return used
 
 
 

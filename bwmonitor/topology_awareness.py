@@ -16,7 +16,7 @@ from collections import namedtuple
 import logging
 from ryu.topology.api import get_all_switch
 import json
-
+import copy
 import redis
 CONF = cfg.CONF
 
@@ -156,15 +156,19 @@ class TopoDetector(app_manager.RyuApp):
         return edges
 
     def _dump_topo(self):
+        result = {}
         while True :
-            result = {}
+            result.clear()
             if self.graph :
                 for n1 in self.graph :
                     result.setdefault(n1.dpid,{})
                     for n2 in self.graph[n1] :
                         if n2.dpid in result and n1.dpid in result[n2.dpid] :
                             continue
-                        result[n1.dpid][n2.dpid] = self.graph[n1][n2]
+                        result[n1.dpid][n2.dpid] = copy.deepcopy(self.graph[n1][n2])
+                        result[n1.dpid][n2.dpid]['bandwidth_used'] = self.graph[n1][n2]['bandwidth_used']/(1000*1024)+\
+                            self.graph[n2][n1]['bandwidth_used']/(1000*1024)
+                        result[n1.dpid][n2.dpid]['bandwidth'] = self.graph[n1][n2]['bandwidth']*2
                 redis_client.set('topo_for_switchs',json.dumps(result))
             hub.sleep(5)
 
