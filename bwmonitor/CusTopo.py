@@ -74,7 +74,7 @@ class MyTopo(Topo):
                     bw = bandwidth_mapping[i][p]
                 else :
                     bw = bandwidth_mapping[p-1][i+1]
-                self.addLink(switches[i],switches[p-1],bw=bw,delay='%dms'%random.randint(1,100))
+                self.addLink(switches[i],switches[p-1],bw=10,delay='%dms'%10)
 
 
 

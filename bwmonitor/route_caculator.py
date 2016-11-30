@@ -1,4 +1,4 @@
-
+#-*- coding:utf-8 -*-
 from __future__ import division
 from ryu import cfg
 from ryu.base import app_manager
@@ -20,6 +20,8 @@ from ryu.lib.packet import icmp
 from topology_awareness import get_link_node
 import event
 from threading import Lock
+import redis
+import json
 
 QoS = namedtuple("QoS","bandwidth loss latency")
 
@@ -43,6 +45,8 @@ FLOW_STATE_REMOVED = 2
 RECACULATE_FOR_RESOURCE_ADD = 1
 RECACULATE_FOR_RESOURCE_DECREASE = 2
 
+
+redis_client = redis.StrictRedis(host='127.0.0.1', port=6379, db=0)
 
 
 
@@ -68,7 +72,7 @@ class Flow(object) :
         self.occur_timestamp = time.time()
         self.recog_state = FLOW_RECOG_STATE_PREPARE # prepare for application recognization
         self.transport_protocol = transport_protocol
-        self.application_type = transport_protocol
+        self.application_type = 'unknown'
         self.priority = FLOW_PRIORITY_NORMAL
         self.qos = qos
         self.degree_time = 0
@@ -80,6 +84,7 @@ class Flow(object) :
         Flow.id_gen_lock.release()
         self.queue_id = 0
         self.degree_lock = Lock()
+        self.first_data = None
 
     @property
     def is_degrade(self):
@@ -89,6 +94,7 @@ class Flow(object) :
         if path :
             self.path = path
             self.path.install(self)
+            #LOG.info("path for flow : %s is %s"%(self.match,self.path))
     #TODO:concurrent
     def degrade(self):
         self.degree_lock.acquire()
@@ -102,6 +108,26 @@ class Flow(object) :
             self.priority += 1
             self.degree_time -=1
         self.degree_lock.release()
+
+    def to_dict(self):
+        d = {
+            'src_ip' : self.match['ipv4_src'],
+            'dst_ip' : self.match['ipv4_dst'],
+            'path' : str(self.path),
+            'transport' : 'TCP' if self.transport_protocol == PROTOCOL_TCP else 'UDP',
+            'app_type' : self.application_type,
+            'speed' : self.speed,
+            'priority' : self.priority,
+            'bandwidth_need' : self.qos.bandwidth if self.qos else 'none',
+            'latency_need' : self.qos.latency if self.qos else 'none'
+        }
+        if self.transport_protocol == PROTOCOL_TCP :
+            d['src_port'] = self.match['tcp_src']
+            d['dst_port'] = self.match['tcp_dst']
+        elif self.transport_protocol == PROTOCOL_UDP :
+            d['src_port'] = self.match['udp_src']
+            d['dst_port'] = self.match['udp_dst']
+        return d
 
 
 
@@ -173,24 +199,26 @@ class Path(object) :
                 preNode = self.nodes[i-1] if i >0 else None
                 node = self.nodes[i]
                 nextNode = self.nodes[i+1]
-                print 'prenode is ',preNode
-                print 'node is ',node
-                print 'next node is ',nextNode
+                # print 'prenode is ',preNode
+                # print 'node is ',node
+                # print 'next node is ',nextNode
                 if preNode == None :
-                    extrasActions = self._get_report_controller_action(app,node)
-                    #extrasActions = []
+                    #extrasActions = self._get_report_controller_action(app,node)
+                    extrasActions = []
                 else :
                     extrasActions = []
                 self._install_flow_entry(flow,preNode,node,nextNode,extra_actions=extrasActions)
-            self.flows[match] = flow
+            self._output_packet()
+
+            self.flows[str(match)] = flow
 
     def flow_remove(self,flow):
-        if flow.match in self.flows and flow.path == self :
+        if str(flow.match) in self.flows and flow.path == self :
             match = flow.match
             edges = self._get_edges()
             for e in edges :
-                e['flows'].remove(match)
-            del self.flows[match]
+                e['flows'].remove(str(match))
+            del self.flows[str(match)]
 
 
     def _install_flow_entry(self,flow,preNode,node,nextNode,extra_actions = None):
@@ -215,10 +243,10 @@ class Path(object) :
             flow_actions = [parser.OFPActionGroup(flow.group_id)]
             app.add_flow(dp,flow.current_priority,match,flow_actions)
         else :
-            app.add_flow(dp,flow.priority,match,actions)
+            app.add_flow(dp,flow.current_priority,match,actions)
 
         if nextNode == self.target :
-            print 'find end of the path',nextNode
+            #print 'find end of the path',nextNode
             nextDp = datapaths[nextNode.dpid]
             ip_to_host = app.host_module.ip_to_host
             target_host = ip_to_host[match['ipv4_dst']]
@@ -228,7 +256,21 @@ class Path(object) :
                 actions = [parser.OFPActionOutput(target_host_port,
                                       ofproto.OFPCML_NO_BUFFER)]
                 app.add_flow(nextDp,flow.current_priority,match,actions)
-        curEdge['flows'].append(match)
+        curEdge['flows'].append(str(match))
+
+    def _caculate_edge_inf(self,flows,edge):
+        flow_keys = edge['flows']
+        flow_inf = 0
+        for k in flow_keys :
+            flow = flows[k]
+            flow_inf += (10**flow.priority)*0.1
+        edge['inf'] = flow_inf/(0.1*edge['free'])
+
+
+
+
+    def _output_packet(self):
+        pass
 
     def _get_report_controller_action(self,app,node):
         datapaths = self._get_datapaths(app)
@@ -255,7 +297,8 @@ class Path(object) :
         return edges
 
     def __str__(self):
-        return self.nodes.__str__()
+        dps = map(lambda x : str(x.dpid),self.nodes)
+        return '->'.join(dps)
 
     def __eq__(self, other):
         return self.nodes.__eq__(other.nodes)
@@ -271,13 +314,15 @@ class RouterCaculator(app_manager.RyuApp):
     def __init__(self, *args, **kwargs):
         super(RouterCaculator,self).__init__(*args,**kwargs)
         self._topo_module = None
+        self._flow_monitor = None
         if self.topo_module :
             self.datapaths = self.topo_module.datapaths
         self.flows = {}
         self.paths = set()
         self._host_module = None
         self.name = "route_caculator"
-
+        self.route_cache = {} #(src_node,dst_node) -> [routes]
+        self.flow_dump_thread = hub.spawn(self._dump_flow_info)
     @property
     def topo_module(self):
         if not self._topo_module :
@@ -290,12 +335,17 @@ class RouterCaculator(app_manager.RyuApp):
             self._host_module = lookup_service_brick("hostaware")
         return self._host_module
 
+    @property
+    def flow_monitor(self):
+        if self._flow_monitor == None :
+            self._flow_monitor = lookup_service_brick('flow_monitor')
+        return self._flow_monitor
+
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
     def switch_features_handler(self, ev):
         datapath = ev.msg.datapath
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
-
         # install table-miss flow entry
         #
         # We specify NO BUFFER to max_len of the output action due to
@@ -331,42 +381,47 @@ class RouterCaculator(app_manager.RyuApp):
         if arp_pkt :
             #ignore arp packet
             return
-        print 'packet from datapath:%s port_no:%s'%(datapath.id,match['in_port'])
+        #print 'packet from datapath:%s port_no:%s'%(datapath.id,match['in_port'])
         match = self.get_match(pkt,match,parser,ofproto)
         if not match :
             return
-
-        if match not in self.flows :
-            print match
+        match_str = str(match)
+        if match_str not in self.flows :
+            #print match
             flow = self.create_flow(match,datapath)
-            self.flows[match] = flow
+            self.flows[match_str] = flow
             qos = self.get_flow_qos(match)
             if not qos :
-                path = self.get_tmp_path_for_flow(flow)
-                print 'tmp path',path
+                path = self.get_init_path_for_flow(flow)
                 self.send_to_application_recog(msg)
             else :
                 flow.qos = qos
                 path = self.get_init_path_for_flow(flow)
+            if not path :
+                self.logger.error("no path for current flow from %s to %s"%(match['ipv4_src'],match['ipv4_dst']) )
+                return
+            print 'path for %s to %s is : %s'%(match['ipv4_src'],match['ipv4_dst'],str(path))
             flow.set_path(path)
             self.paths.add(path)
+            if self.flow_monitor :
+                self.flow_monitor.flow_add(flow)
 
-        elif datapath.id == self.flows[match].source_dp_id :
+        elif datapath.id == self.flows[match_str].source_dp_id :
             self.send_to_application_recog(msg)
 
 
-    @set_ev_cls(ofp_event.EventOFPFlowRemoved, MAIN_DISPATCHER)
-    def flow_removed_handler(self,ev):
-        msg = ev.msg
-        dp = msg.datapath
-        ofp = dp.ofproto
-        if msg.reason == ofp.OFPRR_IDLE_TIMEOUT:
-            match = msg.match
-            if self.flow_exists(match) :
-                flow = self.flows[match]
-                flow.state = FLOW_STATE_REMOVED
-                flow_remove_event = event.EventOfFlowRemoved(flow)
-                self.send_event_to_observers(flow_remove_event)
+    # @set_ev_cls(ofp_event.EventOFPFlowRemoved, MAIN_DISPATCHER)
+    # def flow_removed_handler(self,ev):
+    #     msg = ev.msg
+    #     dp = msg.datapath
+    #     ofp = dp.ofproto
+    #     if msg.reason == ofp.OFPRR_IDLE_TIMEOUT:
+    #         match = msg.match
+    #         if self.flow_exists(match) :
+    #             flow = self.flows[match]
+    #             flow.state = FLOW_STATE_REMOVED
+    #             flow_remove_event = event.EventOfFlowRemoved(flow)
+    #             self.send_event_to_observers(flow_remove_event)
 
 
 
@@ -449,11 +504,11 @@ class RouterCaculator(app_manager.RyuApp):
         if buffer_id:
             mod = parser.OFPFlowMod(datapath=datapath, buffer_id=buffer_id,
                                     priority=priority, match=match,
-                                    instructions=inst,idle_timeout=idle_timeout,flags = ofproto.OFPFF_SEND_FLOW_REM)
+                                    instructions=inst,idle_timeout=idle_timeout,flags = 1)
         else:
             mod = parser.OFPFlowMod(datapath=datapath, priority=priority,
                                     match=match, instructions=inst,idle_timeout=idle_timeout,
-                                    flags = ofproto.OFPFF_SEND_FLOW_REM)
+                                    flags = 1)
         datapath.send_msg(mod)
 
     #add group table
@@ -484,7 +539,8 @@ class RouterCaculator(app_manager.RyuApp):
         if path :
             return path
         else :
-            pass
+            #virtual reschedule
+            return None
 
     '''
         callback :
@@ -583,16 +639,35 @@ class RouterCaculator(app_manager.RyuApp):
 
 
     def _get_best_route_for_flow(self,flow):
-        graph = self.topo_module
+        graph = self.topo_module.graph
         src = get_link_node(flow.source_dp_id)
         dst = get_link_node(flow.target_dp_id)
-        raw_paths = nx.all_simple_paths(graph,src,dst)
-        paths = [Path(graph,rp) for rp in raw_paths]
+        if (src,dst) in self.route_cache :
+            raw_paths = self.route_cache[(src,dst)]
+        else :
+            raw_paths = nx.all_simple_paths(graph,src,dst)
+            print raw_paths
+            if not raw_paths :
+                return None
+        paths = []
+        rps = []
+        for rp in raw_paths :
+            paths.append(Path(graph,rp))
+            rps.append(rp)
+        self.route_cache[(src,dst)] = rps
         paths = filter(lambda p : p.meet_qos_for_flow(flow),paths)
+
         if paths :
-            return sorted(paths,cmp=lambda x,y : cmp(x.inf,y.inf))[0]
+            return sorted(paths,cmp=lambda x,y : cmp(x.inf,y.inf) if x.inf != y.inf else cmp(x.latency,y.latency))[0]
         else :
             return None
+
+    def _dump_flow_info(self):
+        while True :
+            flows = [f.to_dict() for f in self.flows.values()]
+            redis_client.set('flows',json.dumps(flows))
+            hub.sleep(2)
+
 
 
 

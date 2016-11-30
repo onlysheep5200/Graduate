@@ -16,6 +16,7 @@ import logging
 from collections import namedtuple
 #from . import topology_awareness as topo_aware
 import topology_awareness as topo_aware
+import random
 
 
 CONF = cfg.CONF
@@ -40,7 +41,7 @@ class TopoDetector(app_manager.RyuApp):
     def __init__(self, *args, **kwargs):
         super(TopoDetector, self).__init__(*args, **kwargs)
         self.name = "bandwidthaware"
-        self.topo_module = lookup_service_brick("topoaware")
+        self._topo_module = lookup_service_brick("topoaware")
         self.datapaths = {}
         self.last_port_stats = {} # (dpid,port_no) -> portstatsreply
         self.port_speed = {} # (dpid,port_no) -> speed
@@ -50,6 +51,11 @@ class TopoDetector(app_manager.RyuApp):
 
 
 
+    @property
+    def topo_module(self):
+        if not self._topo_module :
+            self._topo_module = lookup_service_brick('topoaware')
+        return self._topo_module
 
     @set_ev_cls(ofp_event.EventOFPStateChange,
                 [MAIN_DISPATCHER, DEAD_DISPATCHER])
@@ -108,17 +114,17 @@ class TopoDetector(app_manager.RyuApp):
             for dst in links :
                 dst_port = graph[src][dst]['dst_port']
                 dst_key = (dst.dpid,dst_port)
-                dst_speed = self.port_speed[dst_key]
-                dst_loss = self.port_loss[dst_key]
-                if src_speed.version == dst_speed.version :
-                    used = min(src.tx_speed,dst.rx_speed)
+                dst_speed = self.port_speed.get(dst_key)
+                dst_loss = self.port_loss.get(dst_key)
+                if dst_speed and src_speed.version == dst_speed.version :
+                    used = min(src_speed.tx_speed,dst_speed.rx_speed)
                     graph[src][dst]['bandwidth_used'] = used
                     graph[src][dst]['free'] = graph[src][dst]['bandwidth'] - used
-                    used = min(src.rx_speed,dst.tx_speed)
+                    used = min(src_speed.rx_speed,dst_speed.tx_speed)
                     graph[dst][src]['bandwidth_used'] = used
                     graph[dst][src]['free'] = graph[dst][src]['bandwidth'] - used
                     graph[src][dst]['loss'] = self._get_link_loss(src_loss.tx_loss,dst_loss.rx_loss)
-                    graph[dst][src]['loss'] = self._get_link_loss(dst_loss.tx_loss,src.rx_loss)
+                    graph[dst][src]['loss'] = self._get_link_loss(dst_loss.tx_loss,src_loss.rx_loss)
 
 
 
@@ -134,8 +140,9 @@ class TopoDetector(app_manager.RyuApp):
                 for p in ports :
                     portReq = ofp_parser.OFPPortStatsRequest(dp,port_no = p)
                     dp.send_msg(portReq)
+                    hub.sleep(random.randint(1,3))
 
-        hub.sleep(setting.PORT_STATS_DETECTING_PERIOD)
+            hub.sleep(setting.PORT_STATS_DETECTING_PERIOD)
 
 
     def _get_time(self, sec, nsec):
@@ -145,10 +152,10 @@ class TopoDetector(app_manager.RyuApp):
         return self._get_time(n_sec, n_nsec) - self._get_time(p_sec, p_nsec)
 
     def _get_speed(self,bytes,pre_bytes,period):
-        return (bytes - pre_bytes) / period
+        return (bytes - pre_bytes) / period if period else 0
 
     def _get_loss(self,packets,drops,pre_packets,pre_drops):
-        return (drops - pre_drops) / (packets - pre_packets)
+        return (drops - pre_drops) / (packets - pre_packets) if packets != pre_packets else 0
 
     def _get_version(self,keymap,key):
         if key not in keymap :

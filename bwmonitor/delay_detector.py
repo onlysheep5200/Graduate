@@ -14,7 +14,7 @@ import time
 import setting
 from ryu.topology import event
 import random
-
+from topology_awareness import get_link_node
 
 CONF = cfg.CONF
 
@@ -40,6 +40,7 @@ class NetworkDelayDetector(app_manager.RyuApp):
         self.measure_thread = hub.spawn(self._detector)
         self.lldp_delays = {} # src -> dst -> delay
         self.link_delays = {} # src -> dst -> delay
+        self._topo_module = None
 
     @set_ev_cls(ofp_event.EventOFPStateChange,
                 [MAIN_DISPATCHER, DEAD_DISPATCHER])
@@ -55,6 +56,12 @@ class NetworkDelayDetector(app_manager.RyuApp):
                 self.logger.debug('Unregister datapath: %016x', datapath.id)
                 del self.link_delays[datapath.id]
                 del self.datapaths[datapath.id]
+
+    @property
+    def topo_module(self):
+        if not self._topo_module :
+            self._topo_module = lookup_service_brick('topoaware')
+        return self._topo_module
 
     def _detector(self):
         """
@@ -122,7 +129,13 @@ class NetworkDelayDetector(app_manager.RyuApp):
         self.lldp_delays[src][dst] = lldpdelay
         delay = self.get_delay(src,dst)
         if delay > 0 : 
-            self.link_delays[src][dst] = delay*1000
+            #self.link_delays[src][dst] = delay*1000
+            self.link_delays[src][dst] = lldpdelay*1000
+            src_node = get_link_node(src)
+            dst_node = get_link_node(dst)
+            if src_node in self.topo_module.graph and dst_node in self.topo_module.graph[src_node] :
+                self.topo_module.graph[get_link_node(src)][get_link_node(dst)]['latency'] = int(delay*1000)
+
 
 
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
