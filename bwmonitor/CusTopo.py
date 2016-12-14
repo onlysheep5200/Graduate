@@ -28,13 +28,11 @@ bandwidth_mapping = {
     0 : {
         9 : 14,
         5 : 10,
-        3 : 32,
         7 : 12
     },
     1 : {
         9 : 23,
         5 : 47,
-        4 : 16,
         8 : 78,
     },
     2 : {
@@ -48,10 +46,11 @@ bandwidth_mapping = {
         10 : 88
     },
     4 : {
-        6 : 34
+        6 : 34,
+        8 : 44
     },
-    6 : {
-        8 : 66
+    5 : {
+        7 : 28
     }
 }
 delays = {}
@@ -70,11 +69,12 @@ class MyTopo(Topo):
             peers = mapping[i]
             for p in peers :
                 #self.addLink(switches[i],switches[p-1],bw=bandwidths[i][p-1],delay='%dms'%delays[i][p-1])
-                # if i in bandwidth_mapping and p in bandwidth_mapping[i]:
-                #     bw = bandwidth_mapping[i][p]
-                # else :
-                #     bw = bandwidth_mapping[p-1][i+1]
-                self.addLink(switches[i],switches[p-1],bw=100,delay='%dms'%10)
+                if i in bandwidth_mapping and p in bandwidth_mapping[i]:
+                     bw = bandwidth_mapping[i][p]
+                else :
+                     print '%d %d'%(i,p)
+                     bw = bandwidth_mapping[p-1][i+1]
+                self.addLink(switches[i],switches[p-1],bw=bw,delay='%dms'%random.randint(1,50))
 
 
 
