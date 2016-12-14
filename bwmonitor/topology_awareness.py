@@ -115,7 +115,7 @@ class TopoDetector(app_manager.RyuApp):
 
         original_bandwidth = self._get_bandwidth(src.dpid,dst.dpid)
 
-        self.graph.add_edge(src,dst,{'influence' : 0.0,'latency' : 0,'bandwidth' : original_bandwidth,'bandwidth_used' : 0,
+        self.graph.add_edge(src,dst,{'inf' : 0.0,'latency' : 0,'bandwidth' : original_bandwidth,'bandwidth_used' : 0,
                                      'loss' : 0, 'free': original_bandwidth,'src_port' : src_port,'dst_port' : dst_port,
                                      'flows' : [],'reserve':0})
 

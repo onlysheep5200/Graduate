@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+<head lang="en">
+    <meta charset="UTF-8">
+    <title></title>
+    <script src="{{ url_for('static',filename='js/echarts.min.js') }}"></script>
+    <script src="{{ url_for('static',filename='js/jquery-3.1.1.min.js') }}"></script>
+</head>
+<body>
+<div id="main" style="width: 600px;height:500px;"></div>
+ <script type="text/javascript">
+     //TODO:自动绘制拓扑
+        // 基于准备好的dom，初始化echarts实例
+    var myChart = echarts.init(document.getElementById('main'));
+
+        // 指定图表的配置项和数据
+    var cars = {
+        9 : [150,300],
+        2 : [200,250],
+        1 : [200,350],
+        5 : [300,300],
+        8 : [350,200],
+        7 : [350,400],
+        6 : [400,300],
+        4 : [450,250],
+        3 : [450,350],
+        10 : [500,300]
+            };
+    var h_cars = {
+        2 : [50,280],
+        1 : [50,320],
+        3 : [180,380],
+        4 : [180,220],
+        5 : [350,170],
+        6 : [350,430],
+        7 : [470,380],
+        8 : [470,220],
+        9 : [550,320],
+        10 : [550,280]
+
+
+    };
+    var option = {
+        title: {
+            text: '网络拓扑图',
+            top: 'top',
+            left: 'left'
+        },
+        tooltip: {},
+        legend: [{
+            // selectedMode: 'single',
+            data: ['交换机','主机']
+        }],
+        animation: true,
+        series : [
+            {
+                name: '网络拓扑',
+                type: 'graph',
+                layout: 'none',
+                data: [],
+                links: [],
+                categories: [{name:'交换机'},{name:"主机"}],
+                roam: true,
+                label: {
+                    normal: {
+                        position: 'right'
+                    }
+                },
+                force: {
+                    repulsion: 100
+                }
+            }
+        ]
+    };
+
+        function lengthOfObect(obj){
+            if (obj instanceof Object) {
+                var n = 0;
+                for(var k in obj)
+                    n++;
+                return n;
+            }
+            return 0;
+        }
+
+        function create_node(name,type,index){
+            var node = {};
+             node.itemStyle = null;
+             node.value = node.symbolSize;
+                // Use random x, y
+             node.draggable = true;
+             node.idx = index;
+             if(type == 'switch'){
+               node.symbolSize = 20;
+               node.category = 0;
+               node.name = 's'+name;
+               node.value=20;
+               node.x = cars[name][0];
+               node.y = cars[name][1];
+             }else{
+               node.symbolSize = 10;
+               node.category = 1;
+               node.name = name;
+               node.value = 10;
+               var num = name.split('.')[3];
+               node.x = h_cars[num][0];
+               node.y = h_cars[num][1];
+             }
+             return node;
+        }
+
+        function create_link(s_node,t_node,attrs){
+            var link = {};
+            link.source = s_node.idx;
+            link.target = t_node.idx;
+            return link;
+        }
+
+        $.getJSON('/topo_data.json',function(data){
+            var switches = data.switches;
+            var hosts = data.hosts;
+            var nodes = [];
+            var links = [];
+            var exists = {};
+            for(var s in switches) {
+                var s_node = exists[s];
+                if (!s_node)
+                {
+                    s_node = create_node(s,'switch',nodes.length);
+                    nodes.push(s_node);
+                    exists[s] = s_node;
+                }
+                var neighbors = switches[s];
+                if(lengthOfObect(neighbors)) {
+                    for (var n in neighbors){
+                        var n_node = exists[n];
+                        if(!n_node){
+                            n_node = create_node(n,'switch',nodes.length);
+                            nodes.push(n_node);
+                            exists[n] = n_node;
+                        }
+                        console.log(s_node);
+                        console.log(n_node);
+                        var link = create_link(s_node,n_node,neighbors[n]);
+                        links.push(link);
+                    }
+                }
+            }
+            for (var ss in hosts) {
+                var h_list = hosts[ss];
+                var ss_node = exists[ss];
+                console.log(ss_node);
+                for(var h in h_list) {
+                    var h_node = create_node(h_list[h].ip,'host',nodes.length);
+                    nodes.push(h_node);
+                    var h_link = create_link(ss_node,h_node);
+                    console.log(h_link);
+                    links.push(h_link);
+                }
+            }
+            option.series[0].data = nodes;
+            option.series[0].links = links;
+            myChart.setOption(option);
+        })
+ </script>
+</body>
+</html>

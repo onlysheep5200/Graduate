@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head lang="en">
+    <meta charset="UTF-8">
+    <title>{{ title }}</title>
+    <link rel="stylesheet" href="{{ url_for('static',filename='css/bootstrap.css') }}"/>
+</head>
+<body>
+<h3>{{ title }}</h3>
+<div class="table-responsive">
+   <table class="table table-striped">
+        <thead>
+            <tr>
+            {% for th in heads %}
+                <th>{{ th }}</th>
+            {% endfor %}
+            </tr>
+        </thead>
+       <tbody>
+            {% for item in items %}
+                <tr>
+                    {% for col in cols %}
+                        <td>{{ item[col] }}</td>
+                    {% endfor %}
+                </tr>
+            {% endfor %}
+       </tbody>
+    </table>
+</div>
+
+
+<script src="{{ url_for('static',filename='js/jquery-3.1.1.min.js') }}"></script>
+<script src="{{ url_for('static',filename='js/bootstrap.min.js') }}"></script>
+</body>
+</html>

@@ -160,8 +160,9 @@ class Path(object) :
             self.free_bandwidth = sorted(edges,lambda x,y : cmp(x['free'],y['free']))
             self.latency = sum([l['latency'] for l in edges])
             self.loss = reduce(lambda x,y : (1-x)*(1-y),[l['loss'] for l in edges],1)
-            self.qos_flow_exists = len(filter(lambda x : x.priority > FLOW_PRIORITY_NORMAL,self.flows))>0
+            self.qos_flow_exists = len(filter(lambda x : x.priority > FLOW_PRIORITY_NORMAL,self.flows.values()))>0
             self.edges = edges
+            self.inf = sorted(edges,lambda  x,y : cmp(y['inf'],x['inf']))[0]['inf']
 
 
     def meet_qos_for_flow(self,flow):
@@ -211,6 +212,7 @@ class Path(object) :
             self._output_packet()
 
             self.flows[str(match)] = flow
+            self.update_attrs()
 
     def flow_remove(self,flow):
         if str(flow.match) in self.flows and flow.path == self :
@@ -257,6 +259,7 @@ class Path(object) :
                                       ofproto.OFPCML_NO_BUFFER)]
                 app.add_flow(nextDp,flow.current_priority,match,actions)
         curEdge['flows'].append(str(match))
+        self._caculate_edge_inf(app.flows,curEdge)
 
     def _caculate_edge_inf(self,flows,edge):
         flow_keys = edge['flows']
@@ -536,6 +539,7 @@ class RouterCaculator(app_manager.RyuApp):
 
     def get_init_path_for_flow(self, flow):
         path = self._get_best_route_for_flow(flow)
+        #path = self._get_dijstra_route_for_flow(flow)
         if path :
             return path
         else :
@@ -658,9 +662,23 @@ class RouterCaculator(app_manager.RyuApp):
         paths = filter(lambda p : p.meet_qos_for_flow(flow),paths)
 
         if paths :
-            return sorted(paths,cmp=lambda x,y : cmp(x.inf,y.inf) if x.inf != y.inf else cmp(x.latency,y.latency))[0]
+            paths = sorted(paths,cmp=lambda x,y : cmp(x.inf,y.inf))
+            paths = filter(lambda x : x.inf == paths[0].inf,paths)
+            paths = sorted(paths,cmp = lambda x,y : cmp(x.latency,y.latency))
+            return paths[0]
         else :
             return None
+
+    def _get_dijstra_route_for_flow(self,flow):
+        graph = self.topo_module.graph
+        src = get_link_node(flow.source_dp_id)
+        dst = get_link_node(flow.target_dp_id)
+        raw_path = nx.dijkstra_path(graph,src,dst)
+        if raw_path :
+            return Path(graph,raw_path)
+        else :
+            return None
+
 
     def _dump_flow_info(self):
         while True :

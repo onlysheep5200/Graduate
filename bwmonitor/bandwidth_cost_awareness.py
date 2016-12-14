@@ -138,7 +138,7 @@ class BandwidthDetector(app_manager.RyuApp):
             used = max(src_speed.tx_speed,dst_speed.rx_speed)
         else :
             used = src_speed.tx_speed if src_speed.version > dst_speed.version else dst_speed.rx_speed
-        return used
+        return used*8/(1000*1024)
 
 
 

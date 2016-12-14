@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head lang="en">
+    <meta charset="UTF-8">
+    <title></title>
+    <link rel="stylesheet" href="{{ url_for('static',filename='css/bootstrap.css') }}"/>
+</head>
+<body>
+
+<div class="container">
+    <h3>QoS信息配置</h3>
+<form role="form" method="post">
+  <div class="form-group">
+    <label for="src_ip">源地址</label>
+    <input name="src_ip" type="text" class="form-control" id="src_ip" placeholder="输入原地址">
+  </div>
+  <div class="form-group">
+    <label for="dst_ip">目的地址</label>
+    <input name="dst_ip" type="text" class="form-control" id="dst_ip" placeholder="输入目的地址">
+  </div>
+  <div class="form-group">
+    <label for="src_port">源端口</label>
+    <input name="src_port" type="text" class="form-control" id="src_port" placeholder="输入原端口，不填表示无限制">
+  </div>
+  <div class="form-group">
+    <label for="dst_port">目的端口</label>
+    <input name="dst_port" type="text" class="form-control" id="dst_port" placeholder="输入目的端口，不填标识无限制">
+  </div>
+  <div class="form-group">
+      <label for="tsl_select">传输层协议</label>
+      <select id="tsl_select" name="app_type" class="form-control">
+          <option value="non">无限制</option>
+          <option value="tcp">TCP</option>
+          <option value="udp">udp</option>
+      </select>
+    </div>
+   <div class="form-group">
+      <label for="app_select">应用类型</label>
+      <select id="app_select" name="app_type" class="form-control">
+          <option value="non">无限制</option>
+      </select>
+    </div>
+     <div class="form-group">
+      <label for="pri_select">优先级</label>
+      <select id="pri_select" name="priority" class="form-control">
+          <option value="1">保障流量</option>
+          <option value="2">关键流量</option>
+      </select>
+    </div>
+  <div class="form-group">
+    <label for="bandwidth">带宽需求(Mb/s)</label>
+    <input name="bandwidth" type="text" class="form-control" id="bandwidth" placeholder="输入带宽需求,不填表示无限制" />
+  </div>
+  <div class="form-group">
+    <label for="latency">时延需求(ms)</label>
+    <input name="latency" type="text" class="form-control" id="latency" placeholder="输入时延需求,不填表示无限制" />
+  </div>
+  <button type="submit" class="btn btn-default">Submit</button>
+</form>
+</div>
+<script src="{{ url_for('static',filename='js/jquery-3.1.1.min.js') }}"></script>
+<script src="{{ url_for('static',filename='js/bootstrap.min.js') }}"></script>
+</body>
+</html>
