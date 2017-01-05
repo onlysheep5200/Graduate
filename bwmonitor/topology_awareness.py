@@ -34,13 +34,11 @@ bandwidth_mapping = {
     0 : {
         9 : 14,
         5 : 10,
-        3 : 32,
         7 : 12
     },
     1 : {
         9 : 23,
         5 : 47,
-        4 : 16,
         8 : 78,
     },
     2 : {
@@ -54,10 +52,11 @@ bandwidth_mapping = {
         10 : 88
     },
     4 : {
-        6 : 34
+        6 : 34,
+        8 : 44
     },
-    6 : {
-        8 : 66
+    5 : {
+        7 : 28
     }
 }
 
@@ -176,11 +175,11 @@ class TopoDetector(app_manager.RyuApp):
 
 
     def _get_bandwidth(self,src_dp,dst_dp):
-        # if src_dp-1 in bandwidth_mapping and dst_dp in bandwidth_mapping[src_dp-1] :
-        #     return bandwidth_mapping[src_dp-1][dst_dp]
-        # else :
-        #     return bandwidth_mapping[dst_dp-1][src_dp]
-        return 10
+        if src_dp-1 in bandwidth_mapping and dst_dp in bandwidth_mapping[src_dp-1] :
+            return bandwidth_mapping[src_dp-1][dst_dp]
+        else :
+            return bandwidth_mapping[dst_dp-1][src_dp]
+        #return 10
 
 
 #

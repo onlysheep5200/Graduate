@@ -538,8 +538,8 @@ class RouterCaculator(app_manager.RyuApp):
         pass
 
     def get_init_path_for_flow(self, flow):
-        path = self._get_best_route_for_flow(flow)
-        #path = self._get_dijstra_route_for_flow(flow)
+        #path = self._get_best_route_for_flow(flow)
+        path = self._get_dijstra_route_for_flow(flow)
         if path :
             return path
         else :
