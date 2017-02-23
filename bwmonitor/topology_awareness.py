@@ -18,6 +18,9 @@ from ryu.topology.api import get_all_switch
 import json
 import copy
 import redis
+import requests
+from functools import partial
+import traceback
 CONF = cfg.CONF
 
 LOG = logging.getLogger(__name__)
@@ -28,7 +31,7 @@ LinkNode = namedtuple('LinkNode','dpid')
 nodemap = {}
 
 
-redis_client = redis.StrictRedis(host='127.0.0.1', port=6379, db=0)
+redis_client = redis.StrictRedis(**setting.REDIS_CONFIG)
 
 bandwidth_mapping = {
     0 : {
@@ -65,13 +68,23 @@ def get_link_node(dpid):
         return nodemap[dpid]
     return LinkNode(dpid=dpid)
 
-
-
+def fetch_port_info(dpid,portid,infos):
+    hub.sleep(5)
+    try :
+        url = setting.OFCTL_URL+("stats/portdesc/%d/%d"%(dpid,portid))
+        resp = requests.get(url)
+        if resp.status_code != 200:
+            return
+        infos.setdefault(dpid,{})
+        infos[dpid][portid] = resp.json()
+    except Exception,e:
+        print e
+    
 
 
 class TopoDetector(app_manager.RyuApp):
     """
-        NetworkDelayDetector is a Ryu app for collecting link delay.
+        TopoDetector is a Ryu app for collecting network topo.
     """
 
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
@@ -87,6 +100,7 @@ class TopoDetector(app_manager.RyuApp):
         self.refresh_datapath_thread = hub.spawn(self.refresh_datapaths_view)
         self.dump_topo_thread = hub.spawn(self._dump_topo)
         self._host_module = None
+        self.port_info = {} # dpid -> port_id -> {name : "sdsdfsd"}
 
 
     @set_ev_cls(event.EventLinkAdd)
@@ -97,6 +111,8 @@ class TopoDetector(app_manager.RyuApp):
         dst_port = new_link.dst.port_no
         src = get_link_node(new_link.src.dpid)
         dst = get_link_node(new_link.dst.dpid)
+        self.fetch_port_info(new_link.src.dpid,new_link.src.port_no)
+        self.fetch_port_info(new_link.dst.dpid,new_link.dst.port_no)
 
         if src.dpid not in self.dp_outward_port :
             self.dp_outward_port[src.dpid] = []
@@ -118,7 +134,7 @@ class TopoDetector(app_manager.RyuApp):
                                      'loss' : 0, 'free': original_bandwidth,'src_port' : src_port,'dst_port' : dst_port,
                                      'flows' : [],'reserve':0})
 
-        LOG.info("new link add : %s.%s -> %s.%s"%(src.dpid,src_port,dst.dpid,dst_port))
+        self.logger.info("new link add : %s.%s -> %s.%s"%(src.dpid,src_port,dst.dpid,dst_port))
 
 
 
@@ -180,6 +196,9 @@ class TopoDetector(app_manager.RyuApp):
         else :
             return bandwidth_mapping[dst_dp-1][src_dp]
         #return 10
+
+    def fetch_port_info(self,dpid,port_id):
+        hub.spawn(partial(fetch_port_info,dpid,port_id,self.port_info))
 
 
 #

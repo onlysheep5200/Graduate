@@ -32,7 +32,7 @@ def get_host(dpid,port_no,ip,mac) :
         return Host(ip=ip,mac = mac,dpid = dpid,port_no = port_no)
     return hosts[mac]
 
-redis_client = redis.StrictRedis(host='127.0.0.1', port=6379, db=0)
+redis_client = redis.StrictRedis(**setting.REDIS_CONFIG)
 
 # A pure arp proxy
 class HostAwareness(app_manager.RyuApp):
@@ -45,11 +45,17 @@ class HostAwareness(app_manager.RyuApp):
 
     def __init__(self, *args, **kwargs):
         super(HostAwareness, self).__init__(*args, **kwargs)
-        self.topo_module = lookup_service_brick("topoaware")
+        self._topo_module = lookup_service_brick("topoaware")
         self.name = "hostaware"
         self.ip_to_host = {} # ip -> host
         self.mac_to_host = {} # mac -> host
         self.dum_hosts_thread = hub.spawn(self._dump_hosts)
+
+    @property
+    def topo_module(self):
+        if not self._topo_module:
+            self._topo_module = lookup_service_brick("topoaware")
+        return self._topo_module
 
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
     def packet_in_handler(self,ev):

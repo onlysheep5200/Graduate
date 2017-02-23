@@ -16,3 +16,14 @@ APPLICATION_AWARE_TIMEOUT = 3
 
 PATH_ATTR_UPDATE_PERIOD = 2
 
+#redis config
+REDIS_CONFIG = {     
+    "host" : "10.4.235.199",
+    "db"   : 0,
+    "password" : "dong1234",
+    "port"  : 6379
+}
+
+#ofctl url
+OFCTL_URL = "http://127.0.0.1:8080/"
+

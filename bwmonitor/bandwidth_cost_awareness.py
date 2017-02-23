@@ -32,7 +32,7 @@ PortLoss = namedtuple('PortLoss','tx_loss rx_loss version')
 
 class BandwidthDetector(app_manager.RyuApp):
     """
-        NetworkDelayDetector is a Ryu app for collecting link delay.
+        BandwithDetector is a Ryu app for collecting bandwith.
     """
 
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
