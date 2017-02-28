@@ -74,9 +74,10 @@ def fetch_port_info(dpid,portid,infos):
         url = setting.OFCTL_URL+("stats/portdesc/%d/%d"%(dpid,portid))
         resp = requests.get(url)
         if resp.status_code != 200:
+            print resp.text
             return
         infos.setdefault(dpid,{})
-        infos[dpid][portid] = resp.json()
+        infos[dpid][portid] = filter(lambda x : x['port_no'] == portid,resp.json()[str(dpid)])[0]
     except Exception,e:
         print e
     
@@ -204,6 +205,8 @@ class TopoDetector(app_manager.RyuApp):
     def get_port_name(self,dpid,port_id):
         if dpid in self.port_info and port_id in self.port_info[dpid]:
             return self.port_info[dpid][port_id]['name']
+        else:
+            self.fetch_port_info(dpid,port_id)
         return None
 
 

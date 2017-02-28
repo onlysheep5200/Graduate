@@ -37,7 +37,7 @@ class MainHandler(tornado.web.RequestHandler):
     A handler help to create queues
     '''
 
-    def __init__(self):
+    def __init__(self, application, request, **kwargs):
         self.queues = {}
 
 

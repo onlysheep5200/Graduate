@@ -150,14 +150,18 @@ class SimpleSwitch13(app_manager.RyuApp):
         while True:
             port_name = self.topo_module.get_port_name(dpid,port_id)
             if port_name:
+                self.logger.info(port_name)
                 break
+            self.logger.info('port name is None')
             hub.sleep(5)
-        res = requests.get(setting.QUEUE_URL,{
+        
+        params = {
             "port_name" : port_name,
             "queue_id"  : 1,
             "min_rate"  : 0,
             "max_rate"  : 10000000
-        })
+        }
+        res = requests.get(setting.QUEUE_URL,params = params)
         if res.status != 200:
             self.logger.error(res.text)
 
