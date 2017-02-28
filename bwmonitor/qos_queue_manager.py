@@ -64,7 +64,7 @@ class MainHandler(tornado.web.RequestHandler):
 
     @run_on_executor(executor = 'executor')
     def create_qos_queue(self,port_name,queue_id,min_rate=0,max_rate=1000000000):
-        cmd = cmd_template%(port_name,queue_id,min_rate,max_rate)
+        cmd = cmd_template%(port_name,queue_id,queue_id,queue_id,min_rate,max_rate)
         cmd = shlex.split(cmd)
         process = subporcess.Popen(cmd,stdin=subprocess.PIPE,stdout=subprocess.PIPE)
         stdout,stderror = process.communicate()

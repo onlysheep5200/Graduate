@@ -162,7 +162,7 @@ class SimpleSwitch13(app_manager.RyuApp):
             "max_rate"  : 10000000
         }
         res = requests.get(setting.QUEUE_URL,params = params)
-        if res.status != 200:
+        if res.status_code != 200:
             self.logger.error(res.text)
 
 
