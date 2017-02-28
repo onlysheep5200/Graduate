@@ -32,16 +32,20 @@ last_id_for_port = {}
 import tornado.ioloop
 import tornado.web
 
+from concurrent.futures import ThreadPoolExecutor
+
 class MainHandler(tornado.web.RequestHandler):
     '''
     A handler help to create queues
     '''
 
-    def __init__(self, application, request, **kwargs):
+    executor = ThreadPoolExecutor(20)
+
+    #initialize a handler
+    def initialize(self):
         self.queues = {}
 
 
-    @tornado.web.asynchronous
     @tornado.gen.coroutine
     def get(self):
         '''
@@ -58,7 +62,7 @@ class MainHandler(tornado.web.RequestHandler):
         yield self.create_qos_queue(port_name,queue_id,min_rate,max_rate)
         self.write({'status':0})
 
-    @run_on_executor
+    @run_on_executor(executor = 'executor')
     def create_qos_queue(self,port_name,queue_id,min_rate=0,max_rate=1000000000):
         cmd = cmd_template%(port_name,queue_id,min_rate,max_rate)
         cmd = shlex.split(cmd)
