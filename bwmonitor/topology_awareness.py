@@ -201,6 +201,11 @@ class TopoDetector(app_manager.RyuApp):
     def fetch_port_info(self,dpid,port_id):
         hub.spawn(partial(fetch_port_info,dpid,port_id,self.port_info))
 
+    def get_port_name(self,dpid,port_id):
+        if dpid in self.port_info and port_id in self.port_info[dpid]:
+            return self.port_info[dpid][port_id]['name']
+        return None
+
 
 #
 

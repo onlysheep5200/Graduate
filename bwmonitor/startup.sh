@@ -1,0 +1,2 @@
+cd /Users/mac/ryu
+sudo PYTHONPATH=. bin/ryu-manager --observe-links ryu/Graduate/bwmonitor/host_awareness.py ryu/Graduate/bwmonitor/topology_awareness.py ryu/Graduate/bwmonitor/route_caculator.py ryu/Graduate/bwmonitor/delay_detector.py ryu/Graduate/bwmonitor/bandwidth_cost_awareness.py ryu/Graduate/bwmonitor/flow_monitor.py ryu/app/ofctl_rest.py
