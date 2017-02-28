@@ -1,12 +1,6 @@
-<!DOCTYPE html>
-<html>
-<head lang="en">
-    <meta charset="UTF-8">
-    <title></title>
-    <link rel="stylesheet" href="{{ url_for('static',filename='css/bootstrap.css') }}"/>
-</head>
-<body>
+{% extends 'basement.html' %}
 
+{% block main %}
 <div class="container">
     <h3>QoS信息配置</h3>
 <form role="form" method="post">
@@ -58,7 +52,4 @@
   <button type="submit" class="btn btn-default">Submit</button>
 </form>
 </div>
-<script src="{{ url_for('static',filename='js/jquery-3.1.1.min.js') }}"></script>
-<script src="{{ url_for('static',filename='js/bootstrap.min.js') }}"></script>
-</body>
-</html>
+{% endblock %}

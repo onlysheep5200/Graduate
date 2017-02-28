@@ -3,7 +3,14 @@ from collections import namedtuple
 from threading import Lock
 import time
 
-QoS = namedtuple("QoS","bandwidth loss latency")
+'''
+QoS : 
+    bandwidth : bandwidth limit 
+    loss : loss limit
+    latency : latency limit 
+    level :  
+'''
+QoS = namedtuple("QoS","bandwidth loss latency priority")
 
 FLOW_RECOG_STATE_PREPARE = 0
 FLOW_RECOG_STATE_RECOGNIZED = 1

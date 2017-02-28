@@ -13,9 +13,15 @@ if sys.getdefaultencoding() != default_encoding:
 app = Flask(__name__)
 redis_client = redis.StrictRedis(host='127.0.0.1', port=6379, db=0)
 
+@app.route("/")
+def index():
+    return render_template('topo.html')
+
+
 @app.route("/topo")
 def topo_page():
     return render_template("topo.html")
+
 
 @app.route("/topo_data.json")
 def topo_data():
@@ -109,4 +115,8 @@ def get_prio(num) :
         return '保障流量'
     if num == 2 :
         return '关键流量'
+
+
+if __name__ == '__main__':
+    app.run(debug=True)
 

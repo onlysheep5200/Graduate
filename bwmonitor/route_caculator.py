@@ -245,6 +245,15 @@ class RouterCaculator(app_manager.RyuApp):
         datapath.send_msg(req)
 
     def get_flow_qos(self, match):
+        key = "qos.%s"%str(match)
+        content = redis_client.get(key)
+        if content:
+            try:
+                qos = QoS(*json.loads(content))
+                return qos
+            except Exception,e :
+                self.logger.error(e)
+                return None
         return None
 
     def get_tmp_path_for_flow(self, flow):

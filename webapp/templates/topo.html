@@ -1,13 +1,11 @@
-<!DOCTYPE html>
-<html>
-<head lang="en">
-    <meta charset="UTF-8">
-    <title></title>
-    <script src="{{ url_for('static',filename='js/echarts.min.js') }}"></script>
-    <script src="{{ url_for('static',filename='js/jquery-3.1.1.min.js') }}"></script>
-</head>
-<body>
+{% extends 'basement.html' %}
+
+{% block main %}
 <div id="main" style="width: 600px;height:500px;"></div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static',filename='js/echarts.min.js') }}"></script>
  <script type="text/javascript">
      //TODO:自动绘制拓扑
         // 基于准备好的dom，初始化echarts实例
@@ -168,5 +166,4 @@
             myChart.setOption(option);
         })
  </script>
-</body>
-</html>
+{% endblock %}

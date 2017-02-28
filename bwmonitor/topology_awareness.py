@@ -114,6 +114,7 @@ class TopoDetector(app_manager.RyuApp):
         self.fetch_port_info(new_link.src.dpid,new_link.src.port_no)
         self.fetch_port_info(new_link.dst.dpid,new_link.dst.port_no)
 
+
         if src.dpid not in self.dp_outward_port :
             self.dp_outward_port[src.dpid] = []
         self.dp_outward_port[src.dpid].append(src_port)

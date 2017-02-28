@@ -1,11 +1,5 @@
-<!DOCTYPE html>
-<html>
-<head lang="en">
-    <meta charset="UTF-8">
-    <title>{{ title }}</title>
-    <link rel="stylesheet" href="{{ url_for('static',filename='css/bootstrap.css') }}"/>
-</head>
-<body>
+{% extends 'basement.html' %}
+{% block main %}
 <h3>{{ title }}</h3>
 <div class="table-responsive">
    <table class="table table-striped">
@@ -27,9 +21,4 @@
        </tbody>
     </table>
 </div>
-
-
-<script src="{{ url_for('static',filename='js/jquery-3.1.1.min.js') }}"></script>
-<script src="{{ url_for('static',filename='js/bootstrap.min.js') }}"></script>
-</body>
-</html>
+{% endblock %}
