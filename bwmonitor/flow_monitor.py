@@ -83,6 +83,10 @@ class FlowMonitor(app_manager.RyuApp):
             if self.route_module:
                 try:
                     if key in self.route_module.flows:
+                        flow = self.route_module.flows[key]
+                        if flow.path :
+                            flow.path.remove_flow(flow)
+                        flow = None
                         del self.route_module.flows[key]
                         self.logger.info('flow with match %s has been removed',key)
                 except Exception,e:

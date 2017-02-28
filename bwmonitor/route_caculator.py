@@ -124,7 +124,7 @@ class RouterCaculator(app_manager.RyuApp):
             if not path :
                 self.logger.error("no path for current flow from %s to %s"%(match['ipv4_src'],match['ipv4_dst']) )
                 return
-            print 'path for %s to %s is : %s,path inf is %s'%(match['ipv4_src'],match['ipv4_dst'],str(path),str(path.inf))
+            self.logger.info('path for %s to %s is : %s,path inf is %s'%(match['ipv4_src'],match['ipv4_dst'],str(path),str(path.inf)))
             flow.set_path(path)
             self.paths.add(path)
             if self.flow_monitor :
@@ -132,20 +132,6 @@ class RouterCaculator(app_manager.RyuApp):
 
         elif datapath.id == self.flows[match_str].source_dp_id :
             self.send_to_application_recog(msg)
-
-
-    # @set_ev_cls(ofp_event.EventOFPFlowRemoved, MAIN_DISPATCHER)
-    # def flow_removed_handler(self,ev):
-    #     msg = ev.msg
-    #     dp = msg.datapath
-    #     ofp = dp.ofproto
-    #     if msg.reason == ofp.OFPRR_IDLE_TIMEOUT:
-    #         match = msg.match
-    #         if self.flow_exists(match) :
-    #             flow = self.flows[match]
-    #             flow.state = FLOW_STATE_REMOVED
-    #             flow_remove_event = event.EventOfFlowRemoved(flow)
-    #             self.send_event_to_observers(flow_remove_event)
 
 
 

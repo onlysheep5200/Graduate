@@ -198,6 +198,7 @@ class Path(object) :
             for e in edges :
                 e['flows'].remove(str(match))
             del self.flows[str(match)]
+            self.update_attrs()
 
 
     def _install_flow_entry(self,flow,preNode,node,nextNode,extra_actions = None):
