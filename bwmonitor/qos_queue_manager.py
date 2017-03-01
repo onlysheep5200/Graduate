@@ -12,7 +12,7 @@ for mininet, ryu cannot create bridge object for datapath, so here build a servi
 
 cmd_template = '''
 ovs-vsctl set port %s qos=@newqos -- \
-    --id=@newqos create qos type=linux-htb queues=%d=q%d \
+    --id=@newqos create qos type=linux-htb queues=%d=@q%d \
       other-config:max-rate=1000000000 --  \
   --id=@q%d create queue other-config:min-rate=%d other-config:max-rate=%d
 '''
