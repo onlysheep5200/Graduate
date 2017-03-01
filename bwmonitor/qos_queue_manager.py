@@ -14,7 +14,7 @@ cmd_template = '''
 ovs-vsctl set port %s qos=@newqos -- \
     --id=@newqos create qos type=linux-htb \
       other-config:max-rate=1000000000 \
-      queues=%d=@q%d \
+      queues=%d=@q%d -- \
   --id=@q%d create queue other-config:min-rate=%d other-config:max-rate=%d
 '''
 # port_name -> last_queue_id
