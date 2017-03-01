@@ -12,8 +12,9 @@ for mininet, ryu cannot create bridge object for datapath, so here build a servi
 
 cmd_template = '''
 ovs-vsctl set port %s qos=@newqos -- \
-    --id=@newqos create qos type=linux-htb queues=%d=@q%d \
-      other-config:max-rate=1000000000 --  \
+    --id=@newqos create qos type=linux-htb \
+      other-config:max-rate=1000000000 \
+      queues=%d=@q%d \
   --id=@q%d create queue other-config:min-rate=%d other-config:max-rate=%d
 '''
 # port_name -> last_queue_id
@@ -64,6 +65,7 @@ class MainHandler(tornado.web.RequestHandler):
     @run_on_executor(executor = 'executor')
     def create_qos_queue(self,port_name,queue_id,min_rate=0,max_rate=1000000000):
         cmd = cmd_template%(port_name,queue_id,queue_id,queue_id,min_rate,max_rate)
+        print cmd
         cmd = shlex.split(cmd)
         process = subprocess.Popen(cmd,stdin=subprocess.PIPE,stdout=subprocess.PIPE)
         stdout,stderror = process.communicate()
