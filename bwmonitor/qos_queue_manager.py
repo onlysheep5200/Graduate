@@ -68,7 +68,7 @@ class MainHandler(tornado.web.RequestHandler):
         cmd = shlex.split(cmd)
         process = subprocess.Popen(cmd,stdin=subprocess.PIPE,stdout=subprocess.PIPE)
         stdout,stderror = process.communicate()
-        self.queues.setdefault([])
+        self.queues.setdefault(port_name,[])
         self.queues[port_name].append({
             'id':queue_id,
             'uuid':stdout.split('\n')[-1]
