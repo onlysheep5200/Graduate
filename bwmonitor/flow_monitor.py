@@ -65,9 +65,16 @@ class FlowMonitor(app_manager.RyuApp):
                 speed = self._get_speed(stat.byte_count,pre_stat.byte_count,
                                         self._get_period(stat.duration_sec,stat.duration_nsec,pre_stat.duration_sec,
                                                          pre_stat.duration_nsec))
-                flow = flows[match_str]
+                flow = flows.get(match_str)
                 if flow:
                     flow.speed = speed/1024/1000*8
+                    if flow.speed == 0:
+                        flow.zero_time += 1
+                        #speed is zero after threshold
+                        if flow.zero_time > setting.FLOW_REMOVE_THRESHOLD : 
+                            self.remove_flow_table_item(flow,match)
+                            flow.path.flow_remove(flow)
+                            del flows[match_str]
                 self.history_packets[match_str][datapath.id] = stat
 
     #monitor flow removed notification
@@ -85,12 +92,14 @@ class FlowMonitor(app_manager.RyuApp):
                     if key in self.route_module.flows:
                         flow = self.route_module.flows[key]
                         if flow.path :
-                            flow.path.remove_flow(flow)
+                            flow.path.flow_remove(flow)
                         flow = None
                         del self.route_module.flows[key]
                         self.logger.info('flow with match %s has been removed',key)
+                        self._dump_flow_info()
                 except Exception,e:
                     self.logger.warn('rotue module not in flows')
+                    print e
 
 
 
@@ -108,6 +117,10 @@ class FlowMonitor(app_manager.RyuApp):
 
     def flow_add(self,flow):
         self.thread_for_flow[flow.match] = hub.spawn(self.detector_generator(flow))
+
+    def remove_flow_table_item(self,flow,match):
+        path = flow.path
+        pass
 
     def detector_generator(self,flow):
         def _detector() :

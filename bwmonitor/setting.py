@@ -18,9 +18,9 @@ PATH_ATTR_UPDATE_PERIOD = 2
 
 #redis config
 REDIS_CONFIG = {     
-    "host" : "10.4.235.199",
+    "host" : "127.0.0.1",
     "db"   : 0,
-    "password" : "dong1234",
+    # "password" : "dong1234",
     "port"  : 6379
 }
 
@@ -28,5 +28,7 @@ REDIS_CONFIG = {
 OFCTL_URL = "http://127.0.0.1:8080/"
 
 #queue url 
-QUEUE_URL = "http://10.5.237.234:7788/"
+QUEUE_URL = "http://192.168.99.100:7788/"
+
+FLOW_REMOVE_THRESHOLD = 5
 

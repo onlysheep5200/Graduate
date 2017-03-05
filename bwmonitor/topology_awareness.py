@@ -30,6 +30,8 @@ LinkNode = namedtuple('LinkNode','dpid')
 
 nodemap = {}
 
+queue_id = 1
+
 
 redis_client = redis.StrictRedis(**setting.REDIS_CONFIG)
 
@@ -102,6 +104,7 @@ class TopoDetector(app_manager.RyuApp):
         self.dump_topo_thread = hub.spawn(self._dump_topo)
         self._host_module = None
         self.port_info = {} # dpid -> port_id -> {name : "sdsdfsd"}
+        self.dp_queue_id = {} # dpid -> last_queue_id
 
 
     @set_ev_cls(event.EventLinkAdd)
@@ -114,6 +117,8 @@ class TopoDetector(app_manager.RyuApp):
         dst = get_link_node(new_link.dst.dpid)
         self.fetch_port_info(new_link.src.dpid,new_link.src.port_no)
         self.fetch_port_info(new_link.dst.dpid,new_link.dst.port_no)
+        self.dp_queue_id.setdefault(src.dpid,1)
+        self.dp_queue_id.setdefault(dst.dpid,1)
 
 
         if src.dpid not in self.dp_outward_port :
@@ -183,9 +188,9 @@ class TopoDetector(app_manager.RyuApp):
                         if n2.dpid in result and n1.dpid in result[n2.dpid] :
                             continue
                         result[n1.dpid][n2.dpid] = copy.deepcopy(self.graph[n1][n2])
-                        result[n1.dpid][n2.dpid]['bandwidth_used'] = self.graph[n1][n2]['bandwidth_used']/(1000*1024)+\
-                            self.graph[n2][n1]['bandwidth_used']/(1000*1024)
-                        result[n1.dpid][n2.dpid]['bandwidth'] = self.graph[n1][n2]['bandwidth']*2
+                        result[n1.dpid][n2.dpid]['bandwidth_used'] = (self.graph[n1][n2]['bandwidth_used']/(1000*1024)+\
+                            self.graph[n2][n1]['bandwidth_used']/(1000*1024))
+                        result[n1.dpid][n2.dpid]['bandwidth'] = self.graph[n1][n2]['bandwidth']
                 redis_client.set('topo_for_switchs',json.dumps(result))
             hub.sleep(5)
 
@@ -208,6 +213,17 @@ class TopoDetector(app_manager.RyuApp):
         else:
             self.fetch_port_info(dpid,port_id)
         return None
+
+    def get_queue_id(self,dpid): #TODO:concurrency
+        # self.dp_queue_id.setdefault(dpid,1)
+        # qid = self.dp_queue_id[dpid]
+        # self.dp_queue_id[dpid] += 1
+        # return qid
+        #for mininet
+        global queue_id
+        qid = queue_id
+        queue_id+=1
+        return qid
 
 
 #

@@ -24,6 +24,9 @@ import redis
 import json
 from route_helper import *
 CONF = cfg.CONF
+import sys
+reload(sys)
+sys.setdefaultencoding('utf-8')
 
 redis_client = redis.StrictRedis(**setting.REDIS_CONFIG)
 
@@ -186,17 +189,47 @@ class RouterCaculator(app_manager.RyuApp):
         ip_to_host = self.host_module.ip_to_host
         src_host = ip_to_host[match['ipv4_src']]
         dst_host = ip_to_host[match['ipv4_dst']]
+        src_port = ''
+        dst_port = ''
+        tsl = 'none'
         if not src_host or not dst_host :
             self.logger.error("host recognization error")
             return
         if match['ip_proto'] == 6 :
             transport_protocol = PROTOCOL_TCP
+            src_port = match['tcp_src']
+            dst_port = match['tcp_dst']
+            tsl = 'TCP'
+            
         elif match['ip_proto'] == 17 :
             transport_protocol = PROTOCOL_UDP
+            src_port = match['udp_src']
+            dst_port = match['udp_dst']
+            tsl = 'UDP'
         else :
             #only tcp and udp packet need to add to flows
             transport_protocol = PROTOCOL_UNKNOWN
+            tsl = 'none'
         flow = Flow(self,match,src_host.dpid,dst_host.dpid,transport_protocol)
+        flow.application_type = get_application_type(match)
+
+        #most accurate
+        key = 'qos-'+str((unicode(match['ipv4_src']),unicode(match['ipv4_dst']),unicode(src_port),\
+            unicode(dst_port),unicode(tsl),unicode(flow.application_type) if flow.application_type else unicode('none')))
+        #print key
+        qos = redis_client.get(key)
+        if not qos :
+            key = 'qos-'+str((unicode(match['ipv4_src']),unicode(match['ipv4_dst']),unicode(''),\
+                unicode(''),unicode(tsl),unicode(flow.application_type) if flow.application_type else unicode('none')))
+            qos = redis_client.get(key)
+        print qos
+        if qos :
+            qos = json.loads(qos)
+            flow_qos = QoS(qos['bandwidth'],qos['priority'],qos['max_rate'],qos['min_rate'],qos['latency'],qos.get('loss'))
+            flow.qos = flow_qos
+            flow.priority = flow.qos.priority
+        else:
+            flow.qos = None
         return flow
 
 
@@ -206,7 +239,7 @@ class RouterCaculator(app_manager.RyuApp):
 
 
     #add flow entries
-    def add_flow(self, datapath, priority, match, actions, buffer_id=None,idle_timeout=5):
+    def add_flow(self, datapath, priority, match, actions, buffer_id=None,idle_timeout=0):
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
 
@@ -221,6 +254,15 @@ class RouterCaculator(app_manager.RyuApp):
                                     match=match, instructions=inst,idle_timeout=idle_timeout,
                                     flags = 1)
         datapath.send_msg(mod)
+
+    def remove_flow(self,datapath,match):
+        ofproto = datapath.ofproto
+        parser = datapath.ofproto_parser
+        mod = parser.OFPFlowMod(datapath=datapath, command=ofproto.OFPFC_DELETE,
+                                out_port=ofproto.OFPP_ANY, out_group=ofproto.OFPG_ANY,
+                                match=match)
+        datapath.send_msg(mod)
+
 
     #add group table
     def add_group(self,datapath,type,group_id,buckets):
@@ -256,7 +298,7 @@ class RouterCaculator(app_manager.RyuApp):
 
     def get_init_path_for_flow(self, flow):
         #path = self._get_best_route_for_flow(flow)
-        path = self._get_dijstra_route_for_flow(flow)
+        path = self._get_best_route_for_flow(flow)
         if path :
             return path
         else :

@@ -2,6 +2,10 @@
 from collections import namedtuple
 from threading import Lock
 import time
+from ryu.base.app_manager import lookup_service_brick
+from ryu.lib import hub
+import requests
+import setting
 
 '''
 QoS : 
@@ -10,7 +14,7 @@ QoS :
     latency : latency limit 
     level :  
 '''
-QoS = namedtuple("QoS","bandwidth loss latency priority")
+QoS = namedtuple("QoS","bandwidth priority max_rate min_rate latency loss")
 
 FLOW_RECOG_STATE_PREPARE = 0
 FLOW_RECOG_STATE_RECOGNIZED = 1
@@ -62,6 +66,7 @@ class Flow(object) :
         self.queue_id = 0
         self.degree_lock = Lock()
         self.first_data = None
+        self.zero_time = 0
 
     @property
     def is_degrade(self):
@@ -98,6 +103,8 @@ class Flow(object) :
             'bandwidth_need' : self.qos.bandwidth if self.qos else 'none',
             'latency_need' : self.qos.latency if self.qos else 'none'
         }
+        if self.transport_protocol == PROTOCOL_UNKNOWN:
+            d['transport'] = 'none'
         if self.transport_protocol == PROTOCOL_TCP :
             d['src_port'] = self.match['tcp_src']
             d['dst_port'] = self.match['tcp_dst']
@@ -196,9 +203,35 @@ class Path(object) :
             match = flow.match
             edges = self._get_edges()
             for e in edges :
-                e['flows'].remove(str(match))
+                if str(match) in e['flows']:
+                    e['flows'].remove(str(match))
+            app = flow.app
+            datapaths = self._get_datapaths(app)
+            for node in self.nodes :
+                app.remove_flow(datapaths[node.dpid],match)
             del self.flows[str(match)]
             self.update_attrs()
+
+    def create_queue(self,dpid,port_id,queue_id,min_rate=0,max_rate=1000000000):
+        port_name = None
+        topo_module = lookup_service_brick('topoaware')
+        while True:
+            port_name = topo_module.get_port_name(dpid,port_id)
+            if port_name:
+                break
+            hub.sleep(5)
+        
+        params = {
+            "port_name" : port_name,
+            "queue_id"  : queue_id,
+            "min_rate"  : min_rate,
+            "max_rate"  : max_rate
+        }
+        res = requests.get(setting.QUEUE_URL,params = params)
+        if res.status_code != 200:
+            print res.text
+
+
 
 
     def _install_flow_entry(self,flow,preNode,node,nextNode,extra_actions = None):
@@ -212,8 +245,16 @@ class Path(object) :
         parser = dp.ofproto_parser
         actions = [parser.OFPActionOutput(out_port,
                                       ofproto.OFPCML_NO_BUFFER)]
+        if flow.qos:
+            queue_id = lookup_service_brick('topoaware').get_queue_id(node.dpid)
+            max_rate = flow.qos.max_rate
+            min_rate = flow.qos.min_rate
+            hub.spawn(self.create_queue,node.dpid,out_port,queue_id,min_rate,max_rate)
+            actions = [parser.OFPActionSetQueue(queue_id)] + actions
+        
 
-        if flow.recog_state == FLOW_RECOG_STATE_PREPARE and node == self.source :
+        #if flow.recog_state == FLOW_RECOG_STATE_PREPARE and node == self.source :
+        if False:
             all_actions = actions+extra_actions if extra_actions else actions
             buckets = []
             for action in all_actions :
@@ -264,7 +305,7 @@ class Path(object) :
 
     def _get_datapaths(self,app):
         if not hasattr(app,'datapaths') or not app.datapaths:
-            datapaths = lookup_service_brick("topoaware").datapaths
+            datapaths = lookup_service_brick("topoaware").datapaths #TODO:dependency ajust
             app.datapaths = datapaths
         else:
             datapaths = app.datapaths

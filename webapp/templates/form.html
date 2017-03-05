@@ -22,16 +22,19 @@
   </div>
   <div class="form-group">
       <label for="tsl_select">传输层协议</label>
-      <select id="tsl_select" name="app_type" class="form-control">
-          <option value="non">无限制</option>
-          <option value="tcp">TCP</option>
-          <option value="udp">udp</option>
+      <select id="tsl_select" name="tsl_type" class="form-control">
+          <option value="none">无限制</option>
+          <option value="TCP">TCP</option>
+          <option value="UDP">UDP</option>
       </select>
     </div>
    <div class="form-group">
       <label for="app_select">应用类型</label>
       <select id="app_select" name="app_type" class="form-control">
-          <option value="non">无限制</option>
+          <option value="none">无限制</option>
+          <option value="HTTP">HTTP</option>
+          <option value="FTP">FTP</option>
+          <option value="SSH">SSH</option>
       </select>
     </div>
      <div class="form-group">
@@ -42,13 +45,17 @@
       </select>
     </div>
   <div class="form-group">
-    <label for="bandwidth">带宽需求(Mb/s)</label>
-    <input name="bandwidth" type="text" class="form-control" id="bandwidth" placeholder="输入带宽需求,不填表示无限制" />
+    <label for="bandwidth">最低带宽需求(bit/s)</label>
+    <input name="min_rate" type="int" class="form-control" id="min_rate" placeholder="输入最低带宽需求,不填表示无限制" />
   </div>
   <div class="form-group">
+    <label for="bandwidth">最高带宽需求(bit/s)</label>
+    <input name="max_rate" type="text" class="form-control" id="max_rate" placeholder="输入最高带宽需求,不填表示无限制" />
+  </div>
+  <!--<div class="form-group">
     <label for="latency">时延需求(ms)</label>
     <input name="latency" type="text" class="form-control" id="latency" placeholder="输入时延需求,不填表示无限制" />
-  </div>
+  </div>-->
   <button type="submit" class="btn btn-default">Submit</button>
 </form>
 </div>

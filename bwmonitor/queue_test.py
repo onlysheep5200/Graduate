@@ -123,8 +123,9 @@ class SimpleSwitch13(app_manager.RyuApp):
         actions = [
             parser.OFPActionOutput(out_port),
         ]
+        inport_action = []
         if out_port != ofproto.OFPP_FLOOD:
-            actions += [parser.OFPActionSetQueue(1)]
+            actions = [parser.OFPActionSetQueue(out_port+1)] + actions
         
 
         # install a flow to avoid packet_in next time
@@ -145,7 +146,7 @@ class SimpleSwitch13(app_manager.RyuApp):
                                   in_port=in_port, actions=actions, data=data)
         datapath.send_msg(out)
 
-    def create_queue(self,dpid,port_id):
+    def create_queue(self,dpid,port_id,min_rate=0,max_rate=1000000000):
         port_name = None
         while True:
             port_name = self.topo_module.get_port_name(dpid,port_id)
@@ -157,9 +158,9 @@ class SimpleSwitch13(app_manager.RyuApp):
         
         params = {
             "port_name" : port_name,
-            "queue_id"  : 1,
-            "min_rate"  : 0,
-            "max_rate"  : 10000000
+            "queue_id"  : port_id +1,
+            "min_rate"  : min_rate,
+            "max_rate"  : max_rate
         }
         res = requests.get(setting.QUEUE_URL,params = params)
         if res.status_code != 200:

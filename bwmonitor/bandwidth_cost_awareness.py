@@ -134,7 +134,8 @@ class BandwidthDetector(app_manager.RyuApp):
                     graph[dst][src]['loss'] = self._get_link_loss(dst_loss.tx_loss,src_loss.rx_loss)
 
     def get_real_speed(self,src_speed,dst_speed):
-        if src_speed.version == dst_speed.version :
+        #if src_speed.version == dst_speed.version :
+        if True:
             used = max(src_speed.tx_speed,dst_speed.rx_speed)
         else :
             used = src_speed.tx_speed if src_speed.version > dst_speed.version else dst_speed.rx_speed

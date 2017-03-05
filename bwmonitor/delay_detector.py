@@ -68,7 +68,7 @@ class NetworkDelayDetector(app_manager.RyuApp):
             Delay detecting functon.
             Send echo request and calculate link delay periodically
         """
-        while True:
+        for i in range(10):
             self._send_echo_request()
             # self.create_link_delay()
             # try:
@@ -129,8 +129,8 @@ class NetworkDelayDetector(app_manager.RyuApp):
         self.lldp_delays[src][dst] = lldpdelay
         delay = self.get_delay(src,dst)
         if delay > 0 : 
-            #self.link_delays[src][dst] = delay*1000
-            self.link_delays[src][dst] = lldpdelay*1000
+            self.link_delays[src][dst] = delay*1000
+            #self.link_delays[src][dst] = lldpdelay*1000
             src_node = get_link_node(src)
             dst_node = get_link_node(dst)
             if src_node in self.topo_module.graph and dst_node in self.topo_module.graph[src_node] :

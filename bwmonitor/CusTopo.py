@@ -15,13 +15,13 @@ mapping = [
 ]
 host_mapping = {
     9:[2,1],
-    1:[3],
-    7:[6],
-    3:[7],
-    10:[9,10],
-    4:[8],
-    8:[5],
-    2:[4]
+    1:[3,4],
+    7:[9,10],
+    3:[11,12],
+    10:[15,16],
+    4:[13,14],
+    8:[7,8],
+    2:[5,6]
 }
 
 bandwidth_mapping = {
@@ -59,7 +59,7 @@ class MyTopo(Topo):
     '''my topo'''
     def __init__(self):
         Topo.__init__(self)
-        hosts = [self.addHost('h%d'%i) for i in range(1,11)]
+        hosts = [self.addHost('h%d'%i) for i in range(1,17)]
         switches = [self.addSwitch('s%d'%i) for i in range(1,11)]
         for i in range(10) :
             if i+1 in host_mapping :
@@ -74,7 +74,7 @@ class MyTopo(Topo):
                 else :
                      print '%d %d'%(i,p)
                      bw = bandwidth_mapping[p-1][i+1]
-                self.addLink(switches[i],switches[p-1],bw=bw,delay='%dms'%random.randint(1,50))
+                self.addLink(switches[i],switches[p-1],bw=bw,delay='%dms'%random.randint(1,50),max_queue_size=1000000000)
 
 
 
